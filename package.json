@@ -1,27 +1,29 @@
 {
-	"name": "qtuminfo",
-	"private": true,
-	"version": "0.0.1",
-	"description": "",
-	"scripts": {
-		"lerna": "lerna"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/qtumproject/qtuminfo.git"
-	},
-	"keywords": [
-		"qtum",
-		"qtuminfo",
-		"qtum explorer"
-	],
-	"author": "QTUM <foundation@qtum.org>",
-	"license": "MIT",
-	"bugs": {
-		"url": "https://github.com/qtumproject/qtuminfo/issues"
-	},
-	"homepage": "https://github.com/qtumproject/qtuminfo#readme",
-	"devDependencies": {
-		"lerna": "^2.11.0"
-	}
+  "name": "qtuminfo",
+  "private": true,
+  "version": "0.0.1",
+  "description": "",
+  "scripts": {
+    "lerna": "lerna",
+    "lint": "eslint --ext .js,.mjs packages --ignore-path .gitignore"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qtumproject/qtuminfo.git"
+  },
+  "keywords": [
+    "qtum",
+    "qtuminfo",
+    "qtum explorer"
+  ],
+  "author": "QTUM <foundation@qtum.org>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/qtumproject/qtuminfo/issues"
+  },
+  "homepage": "https://github.com/qtumproject/qtuminfo#readme",
+  "devDependencies": {
+    "eslint": "^5.1.0",
+    "lerna": "^2.11.0"
+  }
 }
