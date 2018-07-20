@@ -1,0 +1,18 @@
+{
+  "name": "qtuminfo-lib",
+  "version": "0.0.1",
+  "description": "A pure and powerful JavaScript QTUM library",
+  "main": "lib/index.mjs",
+  "keywords": [
+    "qtum",
+    "cryptocurrency",
+    "blockchain"
+  ],
+  "repository": "https://github.com/qtumproject/qtuminfo/tree/master/qtuminfo-lib",
+  "author": "QTUM <foundation@qtum.org>",
+  "license": "MIT",
+  "dependencies": {
+    "qtum-opcodes": "^1.0.0",
+    "secp256k1": "^3.5.0"
+  }
+}
