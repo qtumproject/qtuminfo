@@ -5,8 +5,7 @@
   "main": "lib/index.mjs",
   "keywords": [
     "qtum",
-    "cryptocurrency",
-    "blockchain"
+    "qtuminfo"
   ],
   "repository": "https://github.com/qtumproject/qtuminfo/tree/master/qtuminfo-lib",
   "author": "QTUM <foundation@qtum.org>",
