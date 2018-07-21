@@ -68,7 +68,7 @@ export default class BufferReader {
   readUInt64LE() {
     let low = this.buffer.readUInt32LE()
     let high = this.buffer.readUInt32LE(4)
-    let value = (BigInt(high) << 32) + BigInt(low)
+    let value = (BigInt(high) << BigInt(32)) + BigInt(low)
     this.buffer = this.buffer.slice(8)
     return value
   }

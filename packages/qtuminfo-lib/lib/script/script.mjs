@@ -267,6 +267,10 @@ export default class Script {
   isStandard() {
     return this.type !== types.UNKNOWN
   }
+
+  isEmpty() {
+    return this.chunks.length === 0
+  }
 }
 
 function isDER(buffer) {

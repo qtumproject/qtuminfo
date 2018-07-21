@@ -8,5 +8,7 @@ export {default as SegwitAddress, InvalidSegwitAddressError} from './encoding/se
 
 export {default as Network} from './network'
 export {default as Address} from './address'
+export {default as Block} from './block/block'
 export {default as Header} from './block/header'
 export {default as Script, InvalidScriptError} from './script/script'
+export {default as Transaction} from './transaction/transaction'

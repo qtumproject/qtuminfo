@@ -96,4 +96,9 @@ export default class BufferWriter {
       this.write(buffer)
     }
   }
+
+  writeVarLengthBuffer(buffer) {
+    this.writeVarintNumber(buffer.length)
+    this.write(buffer)
+  }
 }
