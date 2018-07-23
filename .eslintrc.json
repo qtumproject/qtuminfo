@@ -50,6 +50,7 @@
     "no-label-var": "error",
     "no-shadow-restricted-names": "error",
     "no-undef-init": "error",
+    "no-unused-vars": "warn",
     "no-use-before-define": ["error", "nofunc"],
     "no-buffer-constructor": "error",
     "no-mixed-requires": "warn",
