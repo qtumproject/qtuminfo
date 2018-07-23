@@ -3,6 +3,10 @@ export default class BufferReader {
     this.buffer = buffer
   }
 
+  get length() {
+    return this.buffer.length
+  }
+
   get finished() {
     return this.buffer.length === 0
   }
@@ -90,5 +94,17 @@ export default class BufferReader {
   readVarLengthBuffer() {
     let length = this.readVarintNumber()
     return this.read(length)
+  }
+
+  push(buffer) {
+    this.buffer = Buffer.concat([this.buffer, buffer])
+  }
+
+  skip(offset) {
+    this.buffer = this.buffer.slice(offset)
+  }
+
+  slice(...args) {
+    return this.buffer.slice(...args)
   }
 }
