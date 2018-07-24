@@ -1,4 +1,5 @@
 {
+  "parser": "babel-eslint",
   "parserOptions": {
     "ecmaVersion": 2018,
     "sourceType": "module"
@@ -12,6 +13,8 @@
   },
   "extends": "eslint:recommended",
   "rules": {
+    "for-direction": "error",
+    "getter-return": "warn",
     "no-console": "off",
     "no-empty": ["warn", {"allowEmptyCatch": true}],
     "no-extra-parens": "warn",
@@ -58,7 +61,6 @@
     "no-path-concat": "warn",
     "no-sync": "error",
     "array-bracket-newline": ["warn", "consistent"],
-    "array-element-newline": ["warn", "consistent"],
     "brace-style": ["warn", "1tbs", {"allowSingleLine": true}],
     "camelcase": "warn",
     "comma-spacing": "warn",
@@ -94,7 +96,6 @@
     "operator-assignment": "warn",
     "operator-linebreak": ["warn", "before"],
     "padded-blocks": ["warn", "never"],
-    "prefer-object-spread": "warn",
     "quote-props": ["warn", "as-needed"],
     "quotes": ["warn", "single", {"avoidEscape": true, "allowTemplateLiterals": true}],
     "semi": ["warn", "never"],
@@ -116,7 +117,6 @@
     "arrow-parens": ["warn", "as-needed"],
     "arrow-spacing": "warn",
     "generator-star-spacing": ["warn", {"before": false, "after": true}],
-    "no-confusing-arrow": "error",
     "no-duplicate-imports": "warn",
     "no-useless-computed-key": "warn",
     "no-useless-constructor": "warn",

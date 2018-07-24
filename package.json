@@ -23,7 +23,8 @@
   },
   "homepage": "https://github.com/qtumproject/qtuminfo#readme",
   "devDependencies": {
-    "eslint": "^5.1.0",
+    "babel-eslint": "^8.2.6",
+    "eslint": "^4.19.1",
     "lerna": "^2.11.0"
   }
 }
