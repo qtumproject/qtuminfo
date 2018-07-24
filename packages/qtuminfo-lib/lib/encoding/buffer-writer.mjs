@@ -59,8 +59,8 @@ export default class BufferWriter {
 
   writeUInt64LE(n) {
     let buffer = Buffer.alloc(8)
-    buffer.writeUInt32LE(Number(n & BigInt(0xffffffff)), 0)
-    buffer.writeUInt32LE(Number(n >> BigInt(32)), 4)
+    buffer.writeUInt32LE(Number(n & 0xffffffffn), 0)
+    buffer.writeUInt32LE(Number(n >> 32n), 4)
     this.write(buffer)
   }
 

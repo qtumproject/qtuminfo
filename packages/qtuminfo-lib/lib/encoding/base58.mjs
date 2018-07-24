@@ -20,13 +20,13 @@ export class InvalidBase58Error extends Error {
 export class Base58 {
   static encode(buffer) {
     let result = []
-    let n = BigInt(0)
+    let n = 0n
     for (let x of buffer) {
-      n = n << BigInt(8) | BigInt(x)
+      n = n << 8n | BigInt(x)
     }
     while (n > 0) {
-      let r = n % BigInt(58)
-      n /= BigInt(58)
+      let r = n % 58n
+      n /= 58n
       result.push(Number(r))
     }
     for (let i = 0; buffer[i] === 0; ++i) {
@@ -41,17 +41,17 @@ export class Base58 {
     if (string === '') {
       return Buffer.alloc(0)
     }
-    let n = BigInt(0)
+    let n = 0n
     for (let s of string) {
       if (!(s in ALPHABET_MAP)) {
         throw InvalidBase58Error(string)
       }
-      n = n * BigInt(58) + BigInt(ALPHABET_MAP[s])
+      n = n * 58n + BigInt(ALPHABET_MAP[s])
     }
     let list = []
     while (n > 0) {
-      list.push(Number(n & BigInt(0xff)))
-      n >>= BigInt(8)
+      list.push(Number(n & 0xffn))
+      n >>= 8n
     }
     for (let i = 0; i < string.length && string[i] === ALPHABET[0]; ++i) {
       list.push(0)

@@ -33,6 +33,6 @@ export default class Output {
   }
 
   isEmpty() {
-    return this.value === BigInt(0) && this.scriptPubKey.isEmpty()
+    return this.value === 0n && this.scriptPubKey.isEmpty()
   }
 }
