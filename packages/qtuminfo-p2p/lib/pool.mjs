@@ -7,9 +7,9 @@ const MAX_CONNECTED_PEERS = 8
 const RETRY_SECONDS = 30
 
 export default class Pool extends EventEmitter {
-  constructor({network, addresses = [], dnsSeed, maxSize = MAX_CONNECTED_PEERS}) {
+  constructor({chain, addresses = [], dnsSeed, maxSize = MAX_CONNECTED_PEERS}) {
     super()
-    this.network = network
+    this.chain = chain
     this.keepAlive = false
     this.connectedPeers = new Map()
     this.addresses = []
@@ -77,9 +77,9 @@ export default class Pool extends EventEmitter {
 
   connectPeer(address) {
     if (!this.connectedPeers.has(address.id)) {
-      let port = address.port || this.network.port
+      let port = address.port || this.chain.port
       let ip = address.ip.v4 || address.ip.v6
-      let peer = new Peer({host: ip, port, network: this.network})
+      let peer = new Peer({host: ip, port, chain: this.chain})
       peer.on('connect', () => this.emit('peerconnect', peer, address))
       this.addPeerEventHandlers(peer, address)
       peer.connect()
@@ -89,7 +89,7 @@ export default class Pool extends EventEmitter {
 
   addConnectedPeer(socket, address) {
     if (!this.connectedPeers.has(address.id)) {
-      let peer = new Peer({socket, network: this.network})
+      let peer = new Peer({socket, chain: this.chain})
       this.addPeerEventHandlers(peer, address)
       this.connectedPeers.set(address.id, peer)
       this.emit('peerconnect', peer, address)
@@ -114,7 +114,7 @@ export default class Pool extends EventEmitter {
   }
 
   addAddress(address) {
-    address.port = address.port || this.network.port
+    address.port = address.port || this.chain.port
     address.id = `${address.ip.v6 || address.ip.v4 || ''}:${address.port}`
     if (!this.addresses.find(item => item.id === address.id)) {
       this.addresses.unshift(address)
@@ -133,7 +133,7 @@ export default class Pool extends EventEmitter {
   }
 
   addAddressesFromSeeds() {
-    for (let seed of this.network.dnsSeeds) {
+    for (let seed of this.chain.dnsSeeds) {
       this.addAddressesFromSeed(seed)
     }
   }

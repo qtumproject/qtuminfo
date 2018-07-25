@@ -4,7 +4,7 @@ import {BufferWriter, Hash} from 'qtuminfo-lib'
 export default class Message {
   constructor(command, options) {
     this.command = command
-    this.network = options.network
+    this.chain = options.chain
   }
 
   get payload() {
@@ -25,7 +25,7 @@ export default class Message {
     let payload = this.payload
     let checksum = Hash.sha256sha256(payload).slice(0, 4)
     let writer = new BufferWriter()
-    writer.write(this.network.networkMagic)
+    writer.write(this.chain.networkMagic)
     writer.write(command)
     writer.writeUInt32LE(payload.length)
     writer.write(checksum)

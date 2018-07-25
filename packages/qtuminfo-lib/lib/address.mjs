@@ -12,43 +12,43 @@ const types = {
 }
 
 export default class Address {
-  constructor({type, data, network}) {
+  constructor({type, data, chain}) {
     this.type = type
     this.data = data
-    this.network = network
+    this.chain = chain
   }
 
-  static fromScript(script, network, transactionId, outputIndex) {
+  static fromScript(script, chain, transactionId, outputIndex) {
     switch (script.type) {
     case Script.PUBKEY_OUT:
       return new Address({
         type: types.PAY_TO_PUBLIC_KEY,
         data: Hash.sha256ripemd160(script.chunks[0].buffer),
-        network
+        chain
       })
     case Script.PUBKEYHASH_OUT:
       return new Address({
         type: types.PAY_TO_PUBLIC_KEY_HASH,
         data: script.chunks[2].buffer,
-        network
+        chain
       })
     case Script.SCRIPT_OUT:
       return new Address({
         type: types.PAY_TO_SCRIPT_HASH,
         data: script.chunks[1].buffer,
-        network
+        chain
       })
     case Script.WITNESS_V0_KEYHASH:
       return new Address({
         type: types.PAY_TO_WITNESS_KEY_HASH,
         data: script.chunks[1].buffer,
-        network
+        chain
       })
     case Script.WITNESS_V0_SCRIPTHASH:
       return new Address({
         type: types.PAY_TO_WITNESS_SCRIPT_HASH,
         data: script.chunks[1].buffer,
-        network
+        chain
       })
     case Script.CONTRACT_CREATE:
       return new Address({
@@ -56,13 +56,13 @@ export default class Address {
         data: Hash.sha256ripemd160(
           Buffer.concat(Buffer.from(transactionId).reverse(), getUInt32LEBuffer(outputIndex))
         ),
-        network
+        chain
       })
     case Script.CONTRACT_CALL:
       return new Address({
         type: types.CONTRACT_CALL,
         data: script.chunks[4].buffer,
-        network
+        chain
       })
     }
   }
@@ -71,12 +71,12 @@ export default class Address {
     switch (this.type) {
     case types.PAY_TO_PUBLIC_KEY:
     case types.PAY_TO_PUBLIC_KEY_HASH:
-      return Base58Check.encode(Buffer.from([this.network.pubkeyhash, ...this.data]))
+      return Base58Check.encode(Buffer.from([this.chain.pubkeyhash, ...this.data]))
     case types.PAY_TO_SCRIPT_HASH:
-      return Base58Check.encode(Buffer.from([this.network.scripthash, ...this.data]))
+      return Base58Check.encode(Buffer.from([this.chain.scripthash, ...this.data]))
     case types.PAY_TO_WITNESS_KEY_HASH:
     case types.PAY_TO_WITNESS_SCRIPT_HASH:
-      return SegwitAddress.encode(this.network.witnesshrp, 0, this.data)
+      return SegwitAddress.encode(this.chain.witnesshrp, 0, this.data)
     case types.CONTRACT_CREATE:
     case types.CONTRACT_CALL:
       return this.data.toString('hex')

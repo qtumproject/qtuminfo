@@ -12,9 +12,9 @@ const status = {
 }
 
 export default class Peer extends EventEmitter {
-  constructor({socket, host = 'localhost', port = null, network}) {
+  constructor({socket, host = 'localhost', port = null, chain}) {
     super()
-    this.network = network
+    this.chain = chain
     if (socket) {
       this.socket = socket
       this.host = this.socket.remoteAddress
@@ -23,10 +23,10 @@ export default class Peer extends EventEmitter {
       this.addSocketEventHandlers()
     } else {
       this.host = host
-      this.port = port || this.network.port
+      this.port = port || this.chain.port
       this.status = status.DISCONNECTED
     }
-    this.messages = new Messages({network: this.network})
+    this.messages = new Messages({chain: this.chain})
     this.receiveBuffer = new BufferReader(Buffer.alloc(0))
     this.bestHeight = 0
     this.version = 0

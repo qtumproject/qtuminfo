@@ -7,7 +7,7 @@ const PAYLOAD_START = 16
 
 export default class Messages {
   constructor(options) {
-    this.network = options.network
+    this.chain = options.chain
     this.commands = {}
     for (let [command, Command] of Object.entries(messageMap)) {
       this[command] = this.commands[command] = (args = {}) => new Command({...args, ...options})
@@ -42,7 +42,7 @@ export default class Messages {
 
   _discardUntilNextMessage(buffer) {
     for (let i = 0; ; ++i) {
-      if (Buffer.compare(buffer.slice(0, 4), this.network.networkMagic) === 0) {
+      if (Buffer.compare(buffer.slice(0, 4), this.chain.networkMagic) === 0) {
         buffer.skip(i)
         return true
       } else if (i > buffer.length - 4) {
