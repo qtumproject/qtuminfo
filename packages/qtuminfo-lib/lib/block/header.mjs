@@ -9,7 +9,7 @@ export default class Header {
     hashStateRoot, hashUTXORoot, prevOutStakeHash, prevOutStakeN, vchBlockSig
   }) {
     this.version = version
-    this.prevHash = prevHash
+    this.prevHash = prevHash || Buffer.alloc(32)
     this.merkleRoot = merkleRoot
     this.timestamp = timestamp
     this.bits = bits
