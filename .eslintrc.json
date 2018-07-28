@@ -59,7 +59,6 @@
     "no-mixed-requires": "warn",
     "no-new-require": "error",
     "no-path-concat": "warn",
-    "no-sync": "error",
     "array-bracket-newline": ["warn", "consistent"],
     "brace-style": ["warn", "1tbs", {"allowSingleLine": true}],
     "camelcase": "warn",
