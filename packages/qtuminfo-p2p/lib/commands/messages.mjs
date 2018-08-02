@@ -53,6 +53,9 @@ export default class Messages {
   }
 
   _buildFromBuffer(command, payload) {
+    if (!this.commands[command]) {
+      return
+    }
     let message = this.commands[command]()
     if (message) {
       message.payload = payload

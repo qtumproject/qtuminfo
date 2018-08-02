@@ -1,3 +1,4 @@
+import AddrMessage from './addr'
 import BlockMessage from './block'
 import FeeFilterMessage from './feefilter'
 import GetBlocksMessage from './getblocks'
@@ -16,6 +17,7 @@ import VerackMessage from './verack'
 import VersionMessage from './version'
 
 export const messageMap = {
+  addr: AddrMessage,
   block: BlockMessage,
   feefilter: FeeFilterMessage,
   getblocks: GetBlocksMessage,
