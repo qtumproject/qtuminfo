@@ -37,6 +37,14 @@ export default class Service extends EventEmitter {
 
   async stop() {}
 
+  async onHeaders() {}
+
+  async onBlock() {}
+
+  async onSynced() {}
+
+  async onReorg() {}
+
   subscribe(name, emitter) {
     let subscription = this.subscriptions[name]
     subscription.push(emitter)

@@ -78,11 +78,6 @@ class Header extends RawHeader {
       chainwork: Buffer32toBigInt(header.chainwork.buffer)
     })
   }
-
-  static async findOne(...args) {
-    let header = await Header.collection.findOne(...args)
-    return header && Header.decode(header)
-  }
 }
 
 export default wrapCollectionMethods(Header)

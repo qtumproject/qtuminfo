@@ -23,7 +23,7 @@ export default class HeaderService extends Service {
   }
 
   static get dependencies() {
-    return ['p2p']
+    return ['db', 'p2p']
   }
 
   get APIMethods() {
@@ -38,11 +38,13 @@ export default class HeaderService extends Service {
   }
 
   async getBlockHeader(arg) {
+    let header
     if (Number.isInteger(arg)) {
-      return await Header.findOne({height: arg})
+      header = await Header.findOne({height: arg})
     } else {
-      return await Header.findOne({hash: arg.toString('hex')})
+      header = await Header.findOne({hash: arg.toString('hex')})
     }
+    return header && Header.decode(header)
   }
 
   async start() {
@@ -190,9 +192,7 @@ export default class HeaderService extends Service {
     this.logger.info('Header Service: sync complete')
     this._initialSync = false
     for (let service of this.node.getServicesByOrder()) {
-      if ('onHeaders' in service) {
-        await service.onHeaders()
-      }
+      await service.onHeaders()
     }
     this.emit('reorg complete')
     this._reorging = false
@@ -297,12 +297,13 @@ export default class HeaderService extends Service {
       throw new Error('Header Service: block service is mis-aligned')
     }
     let startingHeight = tip.height + 1
-    let results = (await Header.find(
-      {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
-      {projection: {hash: true}}
-    )).map(header => header.hash)
+    let results = await Header
+      .find({height: {$gte: startingHeight, $lte: startingHeight + blockCount}})
+      .project({hash: true})
+      .map(document => Buffer.from(document.hash, 'hex'))
+      .toArray()
     let index = numResultsNeeded - 1
-    let endHash = index <= 0 || !results[index] ? 0 : results[index]
+    let endHash = index <= 0 || !results[index] ? 0 : Buffer.from(results[index], 'hex')
     return {targetHash: results[0], endHash}
   }
 
@@ -313,7 +314,7 @@ export default class HeaderService extends Service {
   async _adjustHeadersForCheckpointTip() {
     this.logger.info('Header Service: getiing last header synced at height:', this._tip.height)
     await Header.deleteMany({height: {$gt: this._tip.height}})
-    this._lastHeader = await Header.findOne({height: this._tip.height})
+    this._lastHeader = Header.decode(await Header.findOne({height: this._tip.height}))
     this._tip.height = this._lastHeader.height
     this._tip.hash = this._lastHeader.hash
   }
