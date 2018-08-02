@@ -3,6 +3,7 @@ import {Header as RawHeader} from 'qtuminfo-lib'
 import Rpc from 'qtuminfo-rpc'
 import Info from '../models/info'
 import Header from '../models/header'
+import Block from '../models/block'
 import Service from './base'
 
 export default class DbService extends Service {
@@ -52,15 +53,16 @@ export default class DbService extends Service {
 
   async start() {
     this._connection = await mongodb.MongoClient.connect(
-      this.options.mongodb,
+      this.options.mongodb.url,
       {
         poolSize: 20,
         useNewUrlParser: true
       }
     )
-    let dbName = this.options.mongodb.slice(this.options.mongodb.lastIndexOf('/') + 1)
-    await Info.init(this._connection.db(dbName))
-    await Header.init(this._connection.db(dbName))
+    let db = this._connection.db(this.options.mongodb.database)
+    await Info.init(db)
+    await Header.init(db)
+    await Block.init(db, this.chain)
   }
 
   async stop() {

@@ -1,3 +1,7 @@
+import mongodb from 'mongodb'
+
+const {Long} = mongodb
+
 export class AsyncQueue {
   constructor(fn) {
     this.fn = fn
@@ -48,4 +52,16 @@ export function Buffer32toBigInt(buffer) {
     result |= BigInt(buffer[i]) << BigInt(i)
   }
   return result
+}
+
+export function BigInttoLong(n) {
+  let result = new Long(Number(n & 0xffffffffn), Number(n >> 32n & 0xffffffffn))
+  return n < 0n ? result.negate() : result
+}
+
+export function LongtoBigInt(n) {
+  let high = BigInt(n.getHighBits()) << 32n
+  let low = n.getLowBits()
+  low = BigInt(low < 0 ? 0xffffffff - low : low)
+  return high | low
 }
