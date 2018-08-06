@@ -5,7 +5,7 @@ import packageInfo from '../../../package.json'
 
 export default class VersionMessage extends Message {
   constructor({
-    services = BigInt(13),
+    services = 13n,
     nonce = getNonce(),
     timestamp = Math.floor(Date.now() / 1000),
     subversion = `/qtuminfo:${packageInfo.version}/`,

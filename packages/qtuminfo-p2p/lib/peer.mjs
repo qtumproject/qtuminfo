@@ -33,7 +33,7 @@ export default class Peer extends EventEmitter {
     this.subversion = null
     this.versionSent = false
 
-    this.on('ping', message => this.sendPong(message.nonce))
+    this.on('ping', message => this.sendPong({nonce: message.nonce}))
     this.on('version', message => {
       this.version = message.version
       this.subversion = message.subversion
