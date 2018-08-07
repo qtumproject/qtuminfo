@@ -68,7 +68,7 @@ export default class Pool extends EventEmitter {
   }
 
   removeConnectedPeer(address) {
-    if (this.connectedPeers.get(address.id).status === Peer.STATUS.DISCONNECTED) {
+    if (this.connectedPeers.get(address.id).status === Peer.status.DISCONNECTED) {
       this.connectedPeers.delete(address.id)
     } else {
       this.connectedPeers.get(address.id).disconnect()
@@ -97,7 +97,7 @@ export default class Pool extends EventEmitter {
   }
 
   addPeerEventHandlers(peer, address) {
-    peer.on('disconnnect', () => this.emit('peerdisconnect', peer, address))
+    peer.on('disconnect', () => this.emit('peerdisconnect', peer, address))
     peer.on('ready', () => this.emit('peerready', peer, address))
     for (let event of Object.keys(messageMap)) {
       peer.on(event, message => this.emit(`peer${event}`, peer, message))
