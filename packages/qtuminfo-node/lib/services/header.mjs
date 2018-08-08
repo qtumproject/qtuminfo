@@ -38,13 +38,11 @@ export default class HeaderService extends Service {
   }
 
   async getBlockHeader(arg) {
-    let header
     if (Number.isInteger(arg)) {
-      header = await Header.findOne({height: arg})
+      return await Header.findOne({height: arg})
     } else {
-      header = await Header.findOne({hash: arg.toString('hex')})
+      return await Header.findOne({hash: arg.toString('hex')})
     }
-    return header && Header.decode(header)
   }
 
   async start() {
@@ -75,7 +73,12 @@ export default class HeaderService extends Service {
       'Expected tip hash to be genesis hash, but it was not'
     )
     await Header.deleteMany()
-    this._lastHeader = Header.fromRawHeader(this._genesisHeader, 0, STARTING_CHAINWORK)
+    this._lastHeader = new Header({
+      hash: this._genesisHeader.hash,
+      height: 0,
+      ...this._genesisHeader,
+      chainwork: STARTING_CHAINWORK
+    })
     await this._lastHeader.save()
   }
 
@@ -131,7 +134,7 @@ export default class HeaderService extends Service {
 
   async _syncBlock(block) {
     this.logger.debug('Header Service: new block:', block.hash.toString('hex'))
-    let header = Header.fromRawHeader(block.header)
+    let header = new Header({hash: block.header.hash, ...block.header})
     this._onHeader(header)
     await header.save()
     await this.node.updateServiceTip(this.name, this._tip)
@@ -152,24 +155,28 @@ export default class HeaderService extends Service {
   }
 
   async _onHeaders(headers) {
-    this._lastHeaderCount = headers.length
-    if (headers.length === 0) {
-      this._onHeadersSave().catch(err => this._handleError(err))
-    } else {
-      this.logger.debug('Header Service: received:', headers.length, 'header(s)')
-      let transformedHeaders = headers.map(Header.fromRawHeader)
-      for (let header of transformedHeaders) {
-        assert(
-          Buffer.compare(this._lastHeader.hash, header.prevHash) === 0,
-          `headers not in order: ${this._lastHeader.hash.toString('hex')}' -and- ${header.prevHash.toString('hex')},`,
-          `last header at height: ${this._lastHeader.height}`
-        )
-        this._onHeader(header)
+    try {
+      this._lastHeaderCount = headers.length
+      if (headers.length === 0) {
+        this._onHeadersSave().catch(err => this._handleError(err))
+      } else {
+        this.logger.debug('Header Service: received:', headers.length, 'header(s)')
+        let transformedHeaders = headers.map(header => new Header({hash: header.hash, ...header}))
+        for (let header of transformedHeaders) {
+          assert(
+            Buffer.compare(this._lastHeader.hash, header.prevHash) === 0,
+            `headers not in order: ${this._lastHeader.hash.toString('hex')}' -and- ${header.prevHash.toString('hex')},`,
+            `last header at height: ${this._lastHeader.height}`
+          )
+          this._onHeader(header)
+        }
+        await Header.insertMany(transformedHeaders)
       }
-      await Header.insertMany(transformedHeaders.map(header => header.encode()))
+      await this.node.updateServiceTip(this.name, this._tip)
+      await this._onHeadersSave()
+    } catch (err) {
+      this._handleError(err)
     }
-    await this.node.updateServiceTip(this.name, this._tip)
-    await this._onHeadersSave()
   }
 
   _handleError(err) {
@@ -297,13 +304,16 @@ export default class HeaderService extends Service {
       throw new Error('Header Service: block service is mis-aligned')
     }
     let startingHeight = tip.height + 1
-    let results = await Header
-      .find({height: {$gte: startingHeight, $lte: startingHeight + blockCount}})
-      .project({hash: true})
-      .map(document => Buffer.from(document.hash, 'hex'))
-      .toArray()
+    let results = (await Header
+      .find(
+        {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
+        'hash'
+      )
+      .lean()
+      .exec()
+    ).map(header => Buffer.from(header.hash, 'hex'))
     let index = numResultsNeeded - 1
-    let endHash = index <= 0 || !results[index] ? 0 : Buffer.from(results[index], 'hex')
+    let endHash = index <= 0 || !results[index] ? 0 : results[index]
     return {targetHash: results[0], endHash}
   }
 
@@ -314,7 +324,7 @@ export default class HeaderService extends Service {
   async _adjustHeadersForCheckpointTip() {
     this.logger.info('Header Service: getiing last header synced at height:', this._tip.height)
     await Header.deleteMany({height: {$gt: this._tip.height}})
-    this._lastHeader = Header.decode(await Header.findOne({height: this._tip.height}))
+    this._lastHeader = await Header.findOne({height: this._tip.height})
     this._tip.height = this._lastHeader.height
     this._tip.hash = this._lastHeader.hash
   }

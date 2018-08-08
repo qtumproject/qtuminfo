@@ -1,6 +1,8 @@
-import mongodb from 'mongodb'
+import mongoose from 'mongoose'
+import mongooseLong from 'mongoose-long'
+mongooseLong(mongoose)
 
-const {Long} = mongodb
+const {Long} = mongoose.Schema.Types
 
 export class AsyncQueue {
   constructor(fn) {

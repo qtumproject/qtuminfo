@@ -1,74 +1,84 @@
-import {wrapCollectionMethods} from './utils'
-import {BigInttoLong, LongtoBigInt} from '../utils'
+import mongoose from 'mongoose'
+import mongooseLong from 'mongoose-long'
+import {Address} from 'qtuminfo-lib'
+import addressSchema from './address'
+import {Buffer32toBigInt, BigInttoLong, LongtoBigInt} from '../utils'
 
-class Block {
-  constructor({hash, height, size, weight, timestamp, transactions, minedBy, coinStakeValue}) {
-    this.hash = hash
-    this.height = height
-    this.size = size
-    this.weight = weight
-    this.timestamp = timestamp
-    this.transactions = transactions
-    this.minedBy = minedBy
-    this.coinStakeValue = coinStakeValue
-  }
+mongooseLong(mongoose)
 
-  static async init(db, chain) {
-    Block.collection = db.collection('blocks')
-    Block.chain = chain
-    await Block.collection.createIndex({hash: 1}, {unique: true})
-    await Block.collection.createIndex({height: 1}, {unique: true})
-    await Block.collection.createIndex({timestamp: 1})
-    await Block.collection.createIndex({'minedBy.hex': 1, 'minedBy.type': 1})
+const blockSchema = new mongoose.Schema({
+  hash: {
+    type: String,
+    index: true,
+    unique: true,
+    get: s => Buffer.from(s, 'hex'),
+    set: x => x.toString('hex')
+  },
+  height: {type: Number, index: true, unique: true},
+  prevHash: {
+    type: String,
+    default: '0'.repeat(64),
+    get: s => Buffer.from(s, 'hex'),
+    set: x => x.toString('hex')
+  },
+  timestamp: Number,
+  size: Number,
+  weight: Number,
+  transactions: [String],
+  transactionCount: Number,
+  minedBy: addressSchema,
+  coinStakeValue: {
+    type: mongoose.Schema.Types.Long,
+    get: LongtoBigInt,
+    set: BigInttoLong
   }
+})
 
-  static fromRawBlock(block, height) {
-    return new Block({
-      hash: block.hash,
-      height,
-      size: block.size,
-      weight: block.weight,
-      timestamp: block.header.timestamp,
-      transactions: block.transactions.map(transaction => transaction.id),
-      minedBy: null,
-      coinStakeValue: null
-    })
+blockSchema.statics.getBlock = async function(filter) {
+  let [block] = await this.aggregate([
+    {$match: filter},
+    {
+      $lookup: {
+        from: 'headers',
+        localField: 'hash',
+        foreignField: 'hash',
+        as: 'header'
+      }
+    },
+    {$unwind: '$header'}
+  ])
+  if (!block) {
+    return null
   }
-
-  async save() {
-    await Block.collection.findOneAndReplace(
-      {height: this.height},
-      {$set: this.encode()},
-      {upsert: true}
-    )
+  let result = {
+    hash: Buffer.from(block.hash, 'hex'),
+    height: block.height,
+    version: block.header.version,
+    prevHash: Buffer.from(block.prevHash, 'hex'),
+    merkleRoot: block.header.merkleRoot.buffer,
+    bits: block.header.bits,
+    nonce: block.header.nonce,
+    hashStateRoot: block.header.hashStateRoot.buffer,
+    hashUTXORoot: block.header.hashUTXORoot.buffer,
+    prevOutStakeHash: block.header.prevOutStakeHash.buffer,
+    prevOutStakeN: block.header.prevOutStakeN,
+    vchBlockSig: block.header.vchBlockSig.buffer,
+    chainwork: Buffer32toBigInt(block.header.chainwork.buffer),
+    size: block.size,
+    weight: block.weight,
+    transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
+    minedBy: block.minedBy && new Address({
+      type: block.minedBy.type,
+      data: Buffer.from(block.minedBy.hex, 'hex')
+    }),
+    coinStakeValue: block.coinStakeValue && LongtoBigInt(block.coinStakeValue)
   }
-
-  encode() {
-    return {
-      hash: this.hash.toString('hex'),
-      height: this.height,
-      size: this.size,
-      weight: this.weight,
-      timestamp: this.timestamp,
-      transactions: this.transactions.map(id => id.toString('hex')),
-      transactionCount: this.transactions.length,
-      // minedBy: {type: this.minedBy.type, hex: this.minedBy.data.toString('hex')},
-      // coinStakeValue: this.coinStakeValue && BigInttoLong(this.coinStakeValue)
-    }
-  }
-
-  static decode(block) {
-    return new Block({
-      hash: Buffer.from(block.hash, 'hex'),
-      height: block.height,
-      size: block.size,
-      weight: block.weight,
-      timestamp: block.timestamp,
-      transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
-      // minedBy: {type: this.minedBy.type, data: Buffer.from(this.minedBy.data, 'hex'), chain: block.chain},
-      // coinStakeValue: block.coinStakeValue && LongtoBigInt(block.coinStakeValue)
-    })
-  }
+  let nextBlock = await this.model('Header')
+    .findOne({height: block.height + 1}, 'hash')
+    .lean()
+    .exec()
+  result.nextHash = nextBlock && Buffer.from(nextBlock.hash, 'hex')
+  return result
 }
 
-export default wrapCollectionMethods(Block)
+export default mongoose.model('Block', blockSchema)
