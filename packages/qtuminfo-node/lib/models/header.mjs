@@ -34,9 +34,9 @@ const headerSchema = new mongoose.Schema({
   }
 })
 
-headerSchema.methods.isProofOfStake = function() {
+headerSchema.method('isProofOfStake', function() {
   return RawHeader.prototype.isProofOfStake.call(this)
-}
+})
 
 headerSchema.virtual('difficulty').get(function() {
   return new RawHeader(this).difficulty

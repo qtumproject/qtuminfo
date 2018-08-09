@@ -34,7 +34,7 @@ const blockSchema = new mongoose.Schema({
   }
 })
 
-blockSchema.statics.getBlock = async function(filter) {
+blockSchema.static('getBlock', async function(filter) {
   let [block] = await this.aggregate([
     {$match: filter},
     {
@@ -79,6 +79,6 @@ blockSchema.statics.getBlock = async function(filter) {
     .exec()
   result.nextHash = nextBlock && Buffer.from(nextBlock.hash, 'hex')
   return result
-}
+})
 
 export default mongoose.model('Block', blockSchema)

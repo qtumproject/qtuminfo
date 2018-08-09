@@ -34,7 +34,7 @@ export default class DbService extends Service {
   }
 
   async getServiceTip(serviceName) {
-    let tip = await Tip.findOne({service: serviceName}).exec()
+    let tip = await Tip.findOne({service: serviceName})
     if (tip) {
       return tip.tip
     } else {

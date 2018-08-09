@@ -67,10 +67,7 @@ export default class BlockService extends Service {
     this.logger.info('Block Service: retrieved all the headers of lookups')
     let block
     do {
-      block = await Block
-        .findOne({hash: hash.toString('hex')}, 'hash')
-        .lean()
-        .exec()
+      block = await Block.findOne({hash: hash.toString('hex')}, 'hash').lean()
       if (block) {
         hash = Buffer.from(block.hash, 'hex')
       } else {
@@ -87,13 +84,7 @@ export default class BlockService extends Service {
 
   async start() {
     let tip = await this.node.getServiceTip('block')
-    if (
-      tip.height > 0
-      && !await Block
-        .findOne({hash: tip.hash.toString('hex')})
-        .lean()
-        .exec()
-    ) {
+    if (tip.height > 0 && !await Block.findOne({hash: tip.hash.toString('hex')}).lean()) {
       tip = null
     }
     this._blockProcessor = new AsyncQueue(this._onBlock.bind(this))
@@ -116,7 +107,6 @@ export default class BlockService extends Service {
         {hash: true},
       )
       .lean()
-      .exec()
     ).map(block => block.hash)
     for (let i = 0; i < hashes.length - 1; ++i) {
       this._recentBlockHashes.set(hashes[i + 1], Buffer.from(hashes[i], 'hex'))
@@ -125,14 +115,8 @@ export default class BlockService extends Service {
   }
 
   async _getTimeSinceLastBlock() {
-    let header = await Block
-      .findOne({height: Math.max(this._tip.height - 1, 0)}, 'timestamp')
-      .lean()
-      .exec()
-    let tip = await Block
-      .findOne({hash: this._tip.hash.toString('hex')}, 'timestamp')
-      .lean()
-      .exec()
+    let header = await Block.findOne({height: Math.max(this._tip.height - 1, 0)}, 'timestamp').lean()
+    let tip = await Block.findOne({hash: this._tip.hash.toString('hex')}, 'timestamp').lean()
     return convertSecondsToHumanReadable(tip.timestamp - header.timestamp)
   }
 
@@ -271,7 +255,7 @@ export default class BlockService extends Service {
       let block = await Block.findOne(
         {hash: hash.toString('hex')},
         'hash height prevHash'
-      ).exec()
+      )
       blocks.push(block)
       hash = block.prevHash
     }
@@ -315,11 +299,7 @@ export default class BlockService extends Service {
     }
     this._processingBlock = true
     try {
-      if (await Block
-        .findOne({hash: rawBlock.hash.toString('hex')}, 'height')
-        .lean()
-        .exec()
-      ) {
+      if (await Block.findOne({hash: rawBlock.hash.toString('hex')}, 'height').lean()) {
         this._processingBlock = false
         this.logger.debug('Block Service: not syncing, block already in database')
       } else {

@@ -310,7 +310,6 @@ export default class HeaderService extends Service {
         'hash'
       )
       .lean()
-      .exec()
     ).map(header => Buffer.from(header.hash, 'hex'))
     let index = numResultsNeeded - 1
     let endHash = index <= 0 || !results[index] ? 0 : results[index]

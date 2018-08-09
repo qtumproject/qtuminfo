@@ -13,8 +13,8 @@ const addressSchema = new mongoose.Schema({
 
 addressSchema.index({hex: 1, type: 1})
 
-addressSchema.methods.getRawAddress = function() {
+addressSchema.method('getRawAddress', function() {
   return new Address({type: this.type, data: this.hex, chain: mongoose.chain})
-}
+})
 
 export default addressSchema
