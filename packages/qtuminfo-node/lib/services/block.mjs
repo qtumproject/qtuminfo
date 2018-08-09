@@ -67,7 +67,7 @@ export default class BlockService extends Service {
     this.logger.info('Block Service: retrieved all the headers of lookups')
     let block
     do {
-      block = await Block.findOne({hash: hash.toString('hex')}, 'hash').lean()
+      block = await Block.findOne({hash: hash.toString('hex')}, 'hash', {lean: true})
       if (block) {
         hash = Buffer.from(block.hash, 'hex')
       } else {
@@ -84,7 +84,7 @@ export default class BlockService extends Service {
 
   async start() {
     let tip = await this.node.getServiceTip('block')
-    if (tip.height > 0 && !await Block.findOne({hash: tip.hash.toString('hex')}).lean()) {
+    if (tip.height > 0 && !await Block.findOne({hash: tip.hash.toString('hex')}, null, {lean: true})) {
       tip = null
     }
     this._blockProcessor = new AsyncQueue(this._onBlock.bind(this))
@@ -101,13 +101,11 @@ export default class BlockService extends Service {
   }
 
   async _loadRecentBlockHashes() {
-    let hashes = (await Block
-      .find(
-        {height: {$gte: this._tip.height - this._recentBlockHashesCount, $lte: this._tip.height}},
-        {hash: true},
-      )
-      .lean()
-    ).map(block => block.hash)
+    let hashes = (await Block.find(
+      {height: {$gte: this._tip.height - this._recentBlockHashesCount, $lte: this._tip.height}},
+      'hash',
+      {lean: true}
+    )).map(block => block.hash)
     for (let i = 0; i < hashes.length - 1; ++i) {
       this._recentBlockHashes.set(hashes[i + 1], Buffer.from(hashes[i], 'hex'))
     }
@@ -115,8 +113,8 @@ export default class BlockService extends Service {
   }
 
   async _getTimeSinceLastBlock() {
-    let header = await Block.findOne({height: Math.max(this._tip.height - 1, 0)}, 'timestamp').lean()
-    let tip = await Block.findOne({hash: this._tip.hash.toString('hex')}, 'timestamp').lean()
+    let header = await Block.findOne({height: Math.max(this._tip.height - 1, 0)}, 'timestamp', {lean: true})
+    let tip = await Block.findOne({hash: this._tip.hash.toString('hex')}, 'timestamp', {lean: true})
     return convertSecondsToHumanReadable(tip.timestamp - header.timestamp)
   }
 
@@ -299,7 +297,7 @@ export default class BlockService extends Service {
     }
     this._processingBlock = true
     try {
-      if (await Block.findOne({hash: rawBlock.hash.toString('hex')}, 'height').lean()) {
+      if (await Block.findOne({hash: rawBlock.hash.toString('hex')}, 'height', {lean: true})) {
         this._processingBlock = false
         this.logger.debug('Block Service: not syncing, block already in database')
       } else {
@@ -380,7 +378,7 @@ export default class BlockService extends Service {
         'height'
       )
     } while (!header)
-    let block = new Block({
+    return await Block.create({
       hash: rawBlock.hash,
       height: header.height,
       prevHash: rawBlock.header.prevHash,
@@ -391,8 +389,6 @@ export default class BlockService extends Service {
       transactionCount: rawBlock.transactions.length
     })
     // TODO minedBy, coinStakeValue
-    await block.save()
-    return block
   }
 
   async _setTip(tip) {

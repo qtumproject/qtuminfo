@@ -73,13 +73,12 @@ export default class HeaderService extends Service {
       'Expected tip hash to be genesis hash, but it was not'
     )
     await Header.deleteMany()
-    this._lastHeader = new Header({
+    this._lastHeader = await Header.create({
       hash: this._genesisHeader.hash,
       height: 0,
       ...this._genesisHeader,
       chainwork: STARTING_CHAINWORK
     })
-    await this._lastHeader.save()
   }
 
   _startHeaderSubscription() {
@@ -304,13 +303,11 @@ export default class HeaderService extends Service {
       throw new Error('Header Service: block service is mis-aligned')
     }
     let startingHeight = tip.height + 1
-    let results = (await Header
-      .find(
-        {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
-        'hash'
-      )
-      .lean()
-    ).map(header => Buffer.from(header.hash, 'hex'))
+    let results = (await Header.find(
+      {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
+      'hash',
+      {lean: true}
+    ) ).map(header => Buffer.from(header.hash, 'hex'))
     let index = numResultsNeeded - 1
     let endHash = index <= 0 || !results[index] ? 0 : results[index]
     return {targetHash: results[0], endHash}

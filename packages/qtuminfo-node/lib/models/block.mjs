@@ -45,7 +45,7 @@ blockSchema.static('getBlock', async function(filter) {
         as: 'header'
       }
     },
-    {$unwind: '$header'}
+    {$addFields: {header: {$arrayElemAt: ['$header', 0]}}}
   ])
   if (!block) {
     return null
@@ -73,10 +73,7 @@ blockSchema.static('getBlock', async function(filter) {
     }),
     coinStakeValue: block.coinStakeValue && LongtoBigInt(block.coinStakeValue)
   }
-  let nextBlock = await this.model('Header')
-    .findOne({height: block.height + 1}, 'hash')
-    .lean()
-    .exec()
+  let nextBlock = await this.model('Header').findOne({height: block.height + 1}, 'hash', {lean: true})
   result.nextHash = nextBlock && Buffer.from(nextBlock.hash, 'hex')
   return result
 })
