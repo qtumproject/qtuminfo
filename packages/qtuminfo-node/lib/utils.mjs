@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 import mongooseLong from 'mongoose-long'
 mongooseLong(mongoose)
 
-const {Long} = mongoose.Schema.Types
+const {Long} = mongoose.Types
 
 export class AsyncQueue {
   constructor(fn) {
@@ -57,13 +57,14 @@ export function Buffer32toBigInt(buffer) {
 }
 
 export function BigInttoLong(n) {
-  let result = new Long(Number(n & 0xffffffffn), Number(n >> 32n & 0xffffffffn))
+  let m = n < 0n ? -n : n
+  let result = new Long(Number(m & 0xffffffffn), Number(m >> 32n & 0xffffffffn))
   return n < 0n ? result.negate() : result
 }
 
 export function LongtoBigInt(n) {
   let high = BigInt(n.getHighBits()) << 32n
   let low = n.getLowBits()
-  low = BigInt(low < 0 ? 0xffffffff - low : low)
+  low = BigInt(low < 0 ? 0x100000000 + low : low)
   return high | low
 }
