@@ -4,14 +4,14 @@ import Input from './input'
 import Output from './output'
 
 export default class Transaction {
-  constructor({version, inputs, outputs, witnesses, lockTime, marker = null, flags = null}) {
+  constructor({version, inputs, outputs, witnesses, lockTime, marker = null, flag = null}) {
     this.version = version
     this.inputs = inputs
     this.outputs = outputs
     this.witnesses = witnesses
     this.lockTime = lockTime
     this.marker = marker
-    this.flags = flags
+    this.flag = flag
   }
 
   get id() {
@@ -36,14 +36,14 @@ export default class Transaction {
     let version = reader.readUInt32LE()
     let inputs = []
     let marker = null
-    let flags = null
+    let flag = null
     let outputs = []
     let witnesses = []
     let lockTime = null
     let inputCount = reader.readVarintNumber()
     if (!inputCount) {
       marker = inputCount
-      flags = reader.readUInt8()
+      flag = reader.readUInt8()
       inputCount = reader.readVarintNumber()
     }
     for (let i = 0; i < inputCount; ++i) {
@@ -53,7 +53,7 @@ export default class Transaction {
     for (let i = 0; i < outputCount; ++i) {
       outputs.push(Output.fromBufferReader(reader))
     }
-    if (flags) {
+    if (flag) {
       for (let i = 0; i < inputCount; ++i) {
         let witnessCount = reader.readVarintNumber()
         let witness = []
@@ -66,7 +66,7 @@ export default class Transaction {
       }
     }
     lockTime = reader.readUInt32LE()
-    return new Transaction({version, inputs, outputs, witnesses, marker, flags, lockTime})
+    return new Transaction({version, inputs, outputs, witnesses, marker, flag, lockTime})
   }
 
   toBuffer() {
@@ -86,8 +86,8 @@ export default class Transaction {
     if (this.marker != null) {
       writer.writeUInt8(0)
     }
-    if (this.flags != null) {
-      writer.writeUInt8(this.flags)
+    if (this.flag != null) {
+      writer.writeUInt8(this.flag)
     }
     writer.writeVarintNumber(this.inputs.length)
     for (let input of this.inputs) {
@@ -97,7 +97,7 @@ export default class Transaction {
     for (let output of this.outputs) {
       output.toBufferWriter(writer)
     }
-    if (this.flags) {
+    if (this.flag) {
       for (let witness of this.witnesses) {
         writer.writeVarintNumber(witness.length)
         for (let item of witness) {

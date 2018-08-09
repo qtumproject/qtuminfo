@@ -174,7 +174,7 @@ export default class Script {
   isScriptHashOut() {
     return this.chunks.length === 3
       && this.chunks[0].code === Opcode.OP_HASH160
-      && this.chunks[1].buffer && this.chunks[1].length === 20
+      && this.chunks[1].buffer && this.chunks[1].buffer.length === 20
       && this.chunks[2].code === Opcode.OP_EQUAL
   }
 

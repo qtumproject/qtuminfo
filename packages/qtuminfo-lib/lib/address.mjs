@@ -54,7 +54,7 @@ export default class Address {
       return new Address({
         type: types.CONTRACT_CREATE,
         data: Hash.sha256ripemd160(
-          Buffer.concat(Buffer.from(transactionId).reverse(), getUInt32LEBuffer(outputIndex))
+          Buffer.concat([Buffer.from(transactionId).reverse(), getUInt32LEBuffer(outputIndex)])
         ),
         chain
       })
