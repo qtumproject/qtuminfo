@@ -1,6 +1,7 @@
-import {Address, Script, Input, Output} from 'qtuminfo-lib'
+import {Address, Script, Input, Output, Transaction as RawTransaction} from 'qtuminfo-lib'
 import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
+import QtumBalance from '../models/qtum-balance'
 import Service from './base'
 import {toBigInt} from '../utils'
 
@@ -100,8 +101,8 @@ export default class TransactionService extends Service {
       flag: transaction.flag,
       inputs: transaction.inputs.map(input => {
         let result = new Input({
-          prevTxId: Buffer.from(input.prevTxId, 'hex'),
-          outputIndex: input.outputIndex,
+          prevTxId: 'prevTxId' in input ? Buffer.from(input.prevTxId, 'hex') : Buffer.alloc(32),
+          outputIndex: 'outputIndex' in input ? input.outputIndex : 0xffffffff,
           scriptSig: Script.fromBuffer(input.scriptSig.buffer),
           sequence: input.sequence
         })
@@ -160,6 +161,7 @@ export default class TransactionService extends Service {
         }
       }
     ])
+    await QtumBalance.deleteMany({height: {$gt: blockTip.height}})
   }
 
   async onReorg(height) {
@@ -194,15 +196,18 @@ export default class TransactionService extends Service {
         }
       }
     ])
+    await QtumBalance.deleteMany({height: {$gt: height}})
   }
 
   async onBlock(block) {
     if (this.node.stopping) {
       return
     }
+    let transactions = []
     for (let i = 0; i < block.transactions.length; ++i) {
-      await this._processTransaction(block.transactions[i], i, block)
+      transactions.push(await this._processTransaction(block.transactions[i], i, block))
     }
+    this._updateBalances(block.height, transactions)
     this._tip.height = block.height
     this._tip.hash = block.hash
     await this.node.updateServiceTip(this.name, this._tip)
@@ -210,29 +215,12 @@ export default class TransactionService extends Service {
 
   async _processTransaction(tx, indexInBlock, block) {
     let balanceChanges = []
-    let inputs = []
-    let outputs = []
 
-    for (let index = 0; index < tx.inputs.length; ++index) {
-      let input = tx.inputs[index]
-      let txo
-      if (Buffer.compare(input.prevTxId, Buffer.alloc(32)) === 0 && input.outputIndex === 0xffffffff) {
-        txo = await TransactionOutput.create({
-          input: {
-            height: block.height,
-            transactionId: tx.id,
-            index,
-            scriptSig: input.scriptSig.toBuffer(),
-            sequence: input.sequence
-          }
-        })
-      } else {
-        txo = await TransactionOutput.findOneAndUpdate(
-          {
-            'output.transactionId': input.prevTxId.toString('hex'),
-            'output.index': input.outputIndex
-          },
-          {
+    let inputs = await Promise.all(
+      tx.inputs.map(async (input, index) => {
+        let txo
+        if (Buffer.compare(input.prevTxId, Buffer.alloc(32)) === 0 && input.outputIndex === 0xffffffff) {
+          txo = await TransactionOutput.create({
             input: {
               height: block.height,
               transactionId: tx.id,
@@ -240,68 +228,105 @@ export default class TransactionService extends Service {
               scriptSig: input.scriptSig.toBuffer(),
               sequence: input.sequence
             }
-          },
-          {
-            new: true,
-            upsert: true,
-            fields: 'address value'
-          }
-        )
-      }
-      inputs.push(txo._id)
-      if (txo.value) {
-        balanceChanges.push({
-          ...txo.address
-            ? {
-              address: {
-                type: txo.address.type,
-                hex: txo.address.data
+          })
+        } else {
+          txo = await TransactionOutput.findOneAndUpdate(
+            {
+              'output.transactionId': input.prevTxId.toString('hex'),
+              'output.index': input.outputIndex
+            },
+            {
+              input: {
+                height: block.height,
+                transactionId: tx.id,
+                index,
+                scriptSig: input.scriptSig.toBuffer(),
+                sequence: input.sequence
               }
+            },
+            {
+              new: true,
+              upsert: true,
+              fields: 'address value'
             }
-            : {},
-          value: -txo.value
-        })
-      }
-    }
-
-    for (let index = 0; index < tx.outputs.length; ++index) {
-      let output = tx.outputs[index]
-      let txo = await TransactionOutput.findOne({
-        'output.transactionId': tx.id.toString('hex'),
-        'output.index': index
+          )
+        }
+        if (txo.value) {
+          balanceChanges.push({
+            ...txo.address
+              ? {
+                address: {
+                  type: txo.address.type,
+                  hex: txo.address.data
+                }
+              }
+              : {},
+            value: -txo.value
+          })
+        }
+        return txo._id
       })
-      if (txo) {
-        txo.output.height = block.height
-        await txo.save()
-      } else {
-        let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
-        txo = await TransactionOutput.create({
-          output: {
-            height: block.height,
-            transactionId: tx.id,
-            index,
-            scriptPubKey: output.scriptPubKey.toBuffer()
-          },
-          value: output.value,
-          ...address ? {address: {type: address.type, hex: address.data}} : {},
-          isStake: tx.outputs[0].scriptPubKey.isEmpty()
+    )
+
+    let outputs = await Promise.all(
+      tx.outputs.map(async (output, index) => {
+        let txo = await TransactionOutput.findOne({
+          'output.transactionId': tx.id.toString('hex'),
+          'output.index': index
         })
-      }
-      outputs.push(txo._id)
-      if (txo.value) {
-        balanceChanges.push({
-          ...txo.address
-            ? {
-              address: {
-                type: txo.address.type,
-                hex: txo.address.data
+        if (txo) {
+          txo.output.height = block.height
+          await txo.save()
+        } else {
+          let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
+          txo = await TransactionOutput.create({
+            output: {
+              height: block.height,
+              transactionId: tx.id,
+              index,
+              scriptPubKey: output.scriptPubKey.toBuffer()
+            },
+            value: output.value,
+            ...address ? {address: {type: address.type, hex: address.data}} : {},
+            isStake: tx.outputs[0].scriptPubKey.isEmpty()
+          })
+        }
+        if (txo.value) {
+          balanceChanges.push({
+            ...txo.address
+              ? {
+                address: {
+                  type: txo.address.type,
+                  hex: txo.address.data
+                }
               }
-            }
-            : {},
-          value: txo.value
-        })
+              : {},
+            value: txo.value
+          })
+        }
+        return txo._id
+      })
+    )
+
+    let balanceMapping = new Map()
+    for (let {address, value} of balanceChanges) {
+      if (address) {
+        let addressKey = `${
+          address.type === Address.PAY_TO_PUBLIC_KEY ? Address.PAY_TO_PUBLIC_KEY_HASH : address.type
+        }:${address.hex.toString('hex')}`
+        balanceMapping.set(addressKey, (balanceMapping.get(addressKey) || 0n) + value)
+      } else {
+        balanceMapping.set(null, (balanceMapping.get(null) || 0n) + value)
       }
     }
+    balanceChanges = [...balanceMapping].map(([addressKey, value]) => {
+      let address = null
+      if (addressKey) {
+        let [type, data] = addressKey.split(':')
+        address = {type, hex: Buffer.from(data, 'hex')}
+      }
+      return {...address ? {address} : {}, value}
+    })
 
     let txBlock = {
       hash: block.hash,
@@ -319,7 +344,7 @@ export default class TransactionService extends Service {
         'createIndex',
         {sort: {createIndex: -1}, limit: 1}
       )
-      await Transaction.create({
+      transaction = await Transaction.create({
         id: tx.id,
         hash: tx.hash,
         version: tx.version,
@@ -337,5 +362,37 @@ export default class TransactionService extends Service {
         createIndex: latestItem ? latestItem.createIndex + 1 : 0
       })
     }
+    return transaction
+  }
+
+  async _updateBalances(height, transactions) {
+    let balanceMapping = new Map()
+    for (let transaction of transactions) {
+      for (let {address, value} of transaction.balanceChanges) {
+        if (!address) {
+          continue
+        }
+        let addressKey = `${address.type}:${address.hex.toString('hex')}`
+        balanceMapping.set(addressKey, (balanceMapping.get(addressKey) || 0n) + value)
+      }
+    }
+    let insertions = await Promise.all(
+      [...balanceMapping]
+        .filter(item => item.value)
+        .map(async ([addressKey, value]) => {
+          let [type, data] = addressKey.split(':')
+          let item = await QtumBalance.findOne(
+            {address: {type, hex: data}},
+            'balance',
+            {sort: {height: -1}}
+          )
+          return {
+            height,
+            address: {type, hex: Buffer.from(data, 'hex')},
+            balance: (item ? item.balance : 0n) + value
+          }
+        })
+    )
+    await QtumBalance.insertMany(insertions)
   }
 }
