@@ -26,7 +26,7 @@ const blockSchema = new mongoose.Schema({
   weight: Number,
   transactions: [String],
   transactionCount: Number,
-  minedBy: addressSchema,
+  miner: addressSchema,
   coinStakeValue: {
     type: mongoose.Schema.Types.Long,
     get: LongtoBigInt,
@@ -67,9 +67,9 @@ blockSchema.static('getBlock', async function(filter) {
     size: block.size,
     weight: block.weight,
     transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
-    minedBy: block.minedBy && new Address({
-      type: block.minedBy.type,
-      data: Buffer.from(block.minedBy.hex, 'hex')
+    miner: block.miner && new Address({
+      type: block.miner.type,
+      data: Buffer.from(block.miner.hex, 'hex')
     }),
     coinStakeValue: block.coinStakeValue && LongtoBigInt(block.coinStakeValue)
   }

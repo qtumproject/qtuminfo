@@ -68,3 +68,15 @@ export function LongtoBigInt(n) {
   low = BigInt(low < 0 ? 0x100000000 + low : low)
   return high | low
 }
+
+export function toBigInt(n) {
+  if (n == null) {
+    return n
+  } else if (n instanceof Long) {
+    return LongtoBigInt(n)
+  } else if (typeof n === 'number') {
+    return BigInt(n)
+  } else {
+    return n
+  }
+}

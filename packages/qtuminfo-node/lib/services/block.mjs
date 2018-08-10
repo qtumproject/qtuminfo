@@ -1,8 +1,9 @@
 import assert from 'assert'
 import LRU from 'lru-cache'
-import {Block as RawBlock} from 'qtuminfo-lib'
+import {Block as RawBlock, Address} from 'qtuminfo-lib'
 import Header from '../models/header'
 import Block from '../models/block'
+import TransactionOutput from '../models/transaction-output'
 import Service from './base'
 import {AsyncQueue} from '../utils'
 
@@ -378,6 +379,20 @@ export default class BlockService extends Service {
         'height'
       )
     } while (!header)
+    let miner
+    let coinStakeValue
+    if (rawBlock.header.isProofOfStake()) {
+      let kernel = rawBlock.transactions[1].inputs[0]
+      let txo = await TransactionOutput.findOne({
+        'output.transactionId': kernel.prevTxId.toString('hex'),
+        'output.index': kernel.outputIndex
+      }, 'address value')
+      miner = {type: Address.PAY_TO_PUBLIC_KEY, data: txo.address.data}
+      coinStakeValue = txo.value
+    } else {
+      let address = Address.fromScript(rawBlock.transactions[0].outputs[0].scriptPubKey)
+      miner = {type: address.type, hex: address.data}
+    }
     return await Block.create({
       hash: rawBlock.hash,
       height: header.height,
@@ -386,9 +401,10 @@ export default class BlockService extends Service {
       size: rawBlock.size,
       weight: rawBlock.weight,
       transactions: rawBlock.transactions.map(transaction => transaction.id.toString('hex')),
-      transactionCount: rawBlock.transactions.length
+      transactionCount: rawBlock.transactions.length,
+      miner,
+      ...coinStakeValue ? {coinStakeValue} : {}
     })
-    // TODO minedBy, coinStakeValue
   }
 
   async _setTip(tip) {
