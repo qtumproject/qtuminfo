@@ -148,7 +148,7 @@ export default class TransactionService extends Service {
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
-      this._tip = blockTip
+      this._tip = {...blockTip}
       await this.node.updateServiceTip(this.name, this._tip)
     }
     await Transaction.deleteMany({'block.height': {$gt: blockTip.height}})
