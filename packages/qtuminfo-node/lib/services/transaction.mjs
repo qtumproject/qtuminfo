@@ -3,7 +3,7 @@ import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
 import QtumBalance from '../models/qtum-balance'
 import Service from './base'
-import {toBigInt} from '../utils'
+import {toBigInt, BigInttoLong} from '../utils'
 
 export default class TransactionService extends Service {
   constructor(options) {
@@ -148,20 +148,20 @@ export default class TransactionService extends Service {
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
-      this._tip = {...blockTip}
+      this._tip = {height: blockTip.height, hash: blockTip.hash}
       await this.node.updateServiceTip(this.name, this._tip)
     }
-    await Transaction.deleteMany({'block.height': {$gt: blockTip.height}})
+    await Transaction.deleteMany({'block.height': {$gt: this._tip.height}})
     await TransactionOutput.bulkWrite([
-      {deleteMany: {filter: {'output.height': {$gt: blockTip.height}}}},
+      {deleteMany: {filter: {'output.height': {$gt: this._tip.height}}}},
       {
         updateMany: {
-          filter: {'input.height': {$gt: blockTip.height}},
+          filter: {'input.height': {$gt: this._tip.height}},
           update: {$unset: {input: ''}}
         }
       }
     ])
-    await QtumBalance.deleteMany({height: {$gt: blockTip.height}})
+    await QtumBalance.deleteMany({height: {$gt: this._tip.height}})
   }
 
   async onReorg(height) {
@@ -203,17 +203,44 @@ export default class TransactionService extends Service {
     if (this.node.stopping) {
       return
     }
-    let transactions = []
     for (let i = 0; i < block.transactions.length; ++i) {
-      transactions.push(await this._processTransaction(block.transactions[i], i, block))
+      await this._processTransaction(block.transactions[i], i, block)
     }
-    this._updateBalances(block.height, transactions)
+    if (block.height > 0) {
+      await this._updateBalances(block.height)
+    }
     this._tip.height = block.height
     this._tip.hash = block.hash
     await this.node.updateServiceTip(this.name, this._tip)
   }
 
   async _processTransaction(tx, indexInBlock, block) {
+    let resultTransaction = await Transaction.findOne({id: tx.id.toString('hex')})
+    if (resultTransaction) {
+      await TransactionOutput.bulkWrite([
+        {
+          updateMany: {
+            filter: {'input.transactionId': tx.id.toString('hex')},
+            update: {'input.height': block.height}
+          }
+        },
+        {
+          updateMany: {
+            filter: {'output.transactionId': tx.id.toString('hex')},
+            update: {'output.height': block.height}
+          }
+        }
+      ])
+      resultTransaction.block = {
+        hash: block.hash,
+        height: block.height,
+        timestamp: block.header.timestamp
+      }
+      resultTransaction.index = indexInBlock
+      await resultTransaction.save()
+      return
+    }
+
     let balanceChanges = []
 
     let inputs = await Promise.all(
@@ -230,39 +257,34 @@ export default class TransactionService extends Service {
             }
           })
         } else {
-          txo = await TransactionOutput.findOneAndUpdate(
-            {
-              'output.transactionId': input.prevTxId.toString('hex'),
-              'output.index': input.outputIndex
-            },
-            {
-              input: {
-                height: block.height,
-                transactionId: tx.id,
-                index,
-                scriptSig: input.scriptSig.toBuffer(),
-                sequence: input.sequence
-              }
-            },
-            {
-              new: true,
-              upsert: true,
-              fields: 'address value'
-            }
-          )
-        }
-        if (txo.value) {
-          balanceChanges.push({
-            ...txo.address
-              ? {
-                address: {
-                  type: txo.address.type,
-                  hex: txo.address.data
+          txo = await TransactionOutput.findOne({
+            'output.transactionId': input.prevTxId.toString('hex'),
+            'output.index': input.outputIndex
+          })
+          let invalidTxId = txo.input && txo.input.transactionId.toString('hex')
+          txo.input = {
+            height: block.height,
+            transactionId: tx.id,
+            index,
+            scriptSig: input.scriptSig.toBuffer(),
+            sequence: input.sequence
+          }
+          await txo.save()
+          if (invalidTxId) {
+            await Transaction.deleteOne({id: invalidTxId})
+            await TransactionOutput.bulkWrite([
+              {deleteMany: {filter: {'output.transactionId': invalidTxId}}},
+              {
+                updateMany: {
+                  filter: {'input.transactionId': invalidTxId},
+                  update: {$unset: {input: ''}}
                 }
               }
-              : {},
-            value: -txo.value
-          })
+            ])
+          }
+        }
+        if (txo.value) {
+          balanceChanges.push({address: txo.address, value: -txo.value})
         }
         return txo._id
       })
@@ -270,129 +292,135 @@ export default class TransactionService extends Service {
 
     let outputs = await Promise.all(
       tx.outputs.map(async (output, index) => {
-        let txo = await TransactionOutput.findOne({
-          'output.transactionId': tx.id.toString('hex'),
-          'output.index': index
-        })
-        if (txo) {
-          txo.output.height = block.height
-          await txo.save()
-        } else {
-          let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
-          txo = await TransactionOutput.create({
-            output: {
-              height: block.height,
-              transactionId: tx.id,
-              index,
-              scriptPubKey: output.scriptPubKey.toBuffer()
-            },
-            value: output.value,
-            ...address ? {address: {type: address.type, hex: address.data}} : {},
-            isStake: tx.outputs[0].scriptPubKey.isEmpty()
-          })
+        let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
+        if (address && address.type === Address.PAY_TO_PUBLIC_KEY) {
+          address.type = Address.PAY_TO_PUBLIC_KEY_HASH
         }
+        let txo = await TransactionOutput.create({
+          output: {
+            height: block.height,
+            transactionId: tx.id,
+            index,
+            scriptPubKey: output.scriptPubKey.toBuffer()
+          },
+          value: output.value,
+          ...address ? {address: {type: address.type, hex: address.data}} : {},
+          isStake: tx.outputs[0].scriptPubKey.isEmpty()
+        })
         if (txo.value) {
-          balanceChanges.push({
-            ...txo.address
-              ? {
-                address: {
-                  type: txo.address.type,
-                  hex: txo.address.data
-                }
-              }
-              : {},
-            value: txo.value
-          })
+          balanceChanges.push({address: txo.address, value: txo.value})
         }
         return txo._id
       })
     )
 
-    let balanceMapping = new Map()
+    let balanceMapping = {}
     for (let {address, value} of balanceChanges) {
       if (address) {
-        let addressKey = `${
-          address.type === Address.PAY_TO_PUBLIC_KEY ? Address.PAY_TO_PUBLIC_KEY_HASH : address.type
-        }:${address.hex.toString('hex')}`
-        balanceMapping.set(addressKey, (balanceMapping.get(addressKey) || 0n) + value)
+        let addressKey = `${address.type}:${address.hex.toString('hex')}`
+        balanceMapping[addressKey] = addressKey in balanceMapping ? balanceMapping[addressKey] + value : value
       } else {
-        balanceMapping.set(null, (balanceMapping.get(null) || 0n) + value)
+        balanceMapping[''] = '' in balanceMapping ? balanceMapping[''] + value : value
       }
     }
-    balanceChanges = [...balanceMapping].map(([addressKey, value]) => {
+    balanceChanges = []
+    for (let [addressKey, value] of Object.entries(balanceMapping)) {
       let address = null
       if (addressKey) {
         let [type, data] = addressKey.split(':')
         address = {type, hex: Buffer.from(data, 'hex')}
       }
-      return {...address ? {address} : {}, value}
-    })
+      balanceChanges.push({...address ? {address} : {}, value})
+    }
 
-    let txBlock = {
-      hash: block.hash,
-      height: block.height,
-      timestamp: block.header.timestamp
-    }
-    let transaction = await Transaction.findOne({id: tx.id.toString('hex')})
-    if (transaction) {
-      transaction.block = txBlock
-      transaction.index = indexInBlock
-      await transaction.save()
-    } else {
-      let latestItem = await Transaction.findOne(
-        {},
-        'createIndex',
-        {sort: {createIndex: -1}, limit: 1}
-      )
-      transaction = await Transaction.create({
-        id: tx.id,
-        hash: tx.hash,
-        version: tx.version,
-        marker: tx.marker,
-        flag: tx.flag,
-        inputs,
-        outputs,
-        witnesses: tx.witnesses,
-        lockTime: tx.lockTime,
-        block: txBlock,
-        index: indexInBlock,
-        size: tx.size,
-        weight: tx.weight,
-        balanceChanges,
-        createIndex: latestItem ? latestItem.createIndex + 1 : 0
-      })
-    }
-    return transaction
+    let latestItem = await Transaction.findOne(
+      {},
+      'createIndex',
+      {sort: {createIndex: -1}, limit: 1}
+    )
+    await Transaction.create({
+      id: tx.id,
+      hash: tx.hash,
+      version: tx.version,
+      marker: tx.marker,
+      flag: tx.flag,
+      inputs,
+      outputs,
+      witnesses: tx.witnesses,
+      lockTime: tx.lockTime,
+      block: {
+        hash: block.hash,
+        height: block.height,
+        timestamp: block.header.timestamp
+      },
+      index: indexInBlock,
+      size: tx.size,
+      weight: tx.weight,
+      balanceChanges: block.height === 0 ? [] : balanceChanges,
+      createIndex: latestItem ? latestItem.createIndex + 1 : 0
+    })
   }
 
-  async _updateBalances(height, transactions) {
-    let balanceMapping = new Map()
-    for (let transaction of transactions) {
-      for (let {address, value} of transaction.balanceChanges) {
-        if (!address) {
-          continue
+  async _updateBalances(height) {
+    let balances = await Transaction.aggregate([
+      {$match: {'block.height': height}},
+      {$unwind: '$balanceChanges'},
+      {$match: {'balanceChanges.address': {$ne: null}}},
+      {
+        $group: {
+          _id: '$balanceChanges.address',
+          value: {$sum: '$balanceChanges.value'}
         }
-        let addressKey = `${address.type}:${address.hex.toString('hex')}`
-        balanceMapping.set(addressKey, (balanceMapping.get(addressKey) || 0n) + value)
-      }
-    }
-    let insertions = await Promise.all(
-      [...balanceMapping]
-        .filter(item => item.value)
-        .map(async ([addressKey, value]) => {
-          let [type, data] = addressKey.split(':')
-          let item = await QtumBalance.findOne(
-            {address: {type, hex: data}},
-            'balance',
-            {sort: {height: -1}}
-          )
-          return {
-            height,
-            address: {type, hex: Buffer.from(data, 'hex')},
-            balance: (item ? item.balance : 0n) + value
+      },
+      {$match: {value: {$ne: 0}}},
+      {
+        $project: {
+          _id: false,
+          address: '$_id',
+          value: '$value'
+        }
+      },
+      {
+        $lookup: {
+          from: 'qtumbalances',
+          localField: 'address',
+          foreignField: 'address',
+          as: 'originals'
+        }
+      },
+      {
+        $project: {
+          address: '$address',
+          value: '$value',
+          originals: {
+            $concatArrays: [
+              '$originals',
+              [{height: 0, balance: 0}]
+            ]
           }
-        })
-    )
-    await QtumBalance.insertMany(insertions)
+        }
+      },
+      {$unwind: '$originals'},
+      {$sort: {'originals.height': -1}},
+      {
+        $group: {
+          _id: '$address',
+          value: {$first: '$value'},
+          balance: {$first: '$originals.balance'}
+        }
+      },
+      {
+        $project: {
+          _id: false,
+          address: '$_id',
+          balance: {$add: ['$balance', '$value']}
+        }
+      }
+    ])
+    for (let item of balances) {
+      item.height = height
+      item.balance = BigInttoLong(toBigInt(item.balance))
+    }
+    await QtumBalance.collection.insertMany(balances)
   }
 }
