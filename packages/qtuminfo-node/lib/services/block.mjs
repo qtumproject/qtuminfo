@@ -387,10 +387,13 @@ export default class BlockService extends Service {
         'output.transactionId': kernel.prevTxId.toString('hex'),
         'output.index': kernel.outputIndex
       }, 'address value')
-      miner = {type: Address.PAY_TO_PUBLIC_KEY, data: txo.address.data}
+      miner = {type: Address.PAY_TO_PUBLIC_KEY_HASH, data: txo.address.data}
       coinStakeValue = txo.value
     } else {
       let address = Address.fromScript(rawBlock.transactions[0].outputs[0].scriptPubKey)
+      if (address.type === Address.PAY_TO_PUBLIC_KEY) {
+        address.type = Address.PAY_TO_PUBLIC_KEY_HASH
+      }
       miner = {type: address.type, hex: address.data}
     }
     return await Block.create({
