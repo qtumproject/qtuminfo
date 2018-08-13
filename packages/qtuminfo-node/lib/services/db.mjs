@@ -36,7 +36,7 @@ export default class DbService extends Service {
   async getServiceTip(serviceName) {
     let tip = await Tip.findOne({service: serviceName})
     if (tip) {
-      return tip.tip
+      return {height: tip.height, hash: tip.hash}
     } else {
       return {height: 0, hash: this._genesisHash}
     }
@@ -45,7 +45,7 @@ export default class DbService extends Service {
   async updateServiceTip(serviceName, tip) {
     await Tip.findOneAndUpdate(
       {service: serviceName},
-      {tip},
+      {height: tip.height, hash: tip.hash},
       {upsert: true}
     )
   }

@@ -38,10 +38,10 @@ export default class HeaderService extends Service {
   }
 
   async getBlockHeader(arg) {
-    if (Number.isInteger(arg)) {
+    if (typeof arg === 'number') {
       return await Header.findOne({height: arg})
     } else {
-      return await Header.findOne({hash: arg.toString('hex')})
+      return await Header.findOne({hash: arg})
     }
   }
 
@@ -141,7 +141,7 @@ export default class HeaderService extends Service {
 
   _broadcast(block) {
     for (let emitter of this.subscriptions.block) {
-      emitter.emite('header/block', block)
+      emitter.emit('header/block', block)
     }
   }
 
@@ -307,7 +307,7 @@ export default class HeaderService extends Service {
       {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
       'hash',
       {lean: true}
-    ) ).map(header => Buffer.from(header.hash, 'hex'))
+    )).map(header => Buffer.from(header.hash, 'hex'))
     let index = numResultsNeeded - 1
     let endHash = index <= 0 || !results[index] ? 0 : results[index]
     return {targetHash: results[0], endHash}
