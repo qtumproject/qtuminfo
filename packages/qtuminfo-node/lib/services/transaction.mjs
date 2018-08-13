@@ -1,9 +1,8 @@
-import {Address, Script, Input, Output, Transaction as RawTransaction} from 'qtuminfo-lib'
+import {Address, Script, Input, Output} from 'qtuminfo-lib'
 import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
-import QtumBalance from '../models/qtum-balance'
 import Service from './base'
-import {toBigInt, BigInttoLong} from '../utils'
+import {toBigInt} from '../utils'
 
 export default class TransactionService extends Service {
   constructor(options) {
@@ -20,17 +19,18 @@ export default class TransactionService extends Service {
   }
 
   async getTransaction(id) {
-    let transaction = (await Transaction.aggregate([
+    let [transaction] = await Transaction.aggregate([
       {$match: {id: id.toString('hex')}},
-      {$unwind: '$inputs'},
       {
         $lookup: {
           from: 'transactionoutputs',
-          localField: 'inputs',
-          foreignField: '_id',
+          localField: 'id',
+          foreignField: 'input.transactionId',
           as: 'input'
         }
       },
+      {$unwind: '$input'},
+      {$sort: {'input.index': 1}},
       {
         $group: {
           _id: '$_id',
@@ -41,15 +41,14 @@ export default class TransactionService extends Service {
           flag: {$first: '$flag'},
           inputs: {
             $push: {
-              prevTxId: {$arrayElemAt: ['$input.output.transactionId', 0]},
-              outputIndex: {$arrayElemAt: ['$input.output.index', 0]},
-              scriptSig: {$arrayElemAt: ['$input.input.scriptSig', 0]},
-              sequence: {$arrayElemAt: ['$input.input.sequence', 0]},
-              value: {$arrayElemAt: ['$input.value', 0]},
-              address: {$arrayElemAt: ['$input.address', 0]}
+              prevTxId: '$input.output.transactionId',
+              outputIndex: '$input.output.index',
+              scriptSig: '$input.input.scriptSig',
+              sequence: '$input.input.sequence',
+              value: '$input.value',
+              address: '$input.address'
             }
           },
-          outputs: {$first: '$outputs'},
           witnesses: {$first: '$witnesses'},
           lockTime: {$first: '$lockTime'},
           block: {$first: '$block'},
@@ -58,15 +57,16 @@ export default class TransactionService extends Service {
           receipts: {$first: '$receipts'}
         }
       },
-      {$unwind: '$outputs'},
       {
         $lookup: {
           from: 'transactionoutputs',
-          localField: 'outputs',
-          foreignField: '_id',
+          localField: 'id',
+          foreignField: 'output.transactionId',
           as: 'output'
         }
       },
+      {$unwind: '$output'},
+      {$sort: {'output.index': 1}},
       {
         $group: {
           _id: '$_id',
@@ -78,9 +78,9 @@ export default class TransactionService extends Service {
           inputs: {$first: '$inputs'},
           outputs: {
             $push: {
-              value: {$arrayElemAt: ['$output.value', 0]},
-              scriptPubKey: {$arrayElemAt: ['$output.output.scriptPubKey', 0]},
-              address: {$arrayElemAt: ['$output.address', 0]}
+              value: '$output.value',
+              scriptPubKey: '$output.output.scriptPubKey',
+              address: '$output.address'
             }
           },
           witnesses: {$first: '$witnesses'},
@@ -91,7 +91,7 @@ export default class TransactionService extends Service {
           receipts: {$first: '$receipts'}
         }
       }
-    ]))[0]
+    ])
 
     return {
       id: Buffer.from(transaction.id, 'hex'),
@@ -161,7 +161,6 @@ export default class TransactionService extends Service {
         }
       }
     ])
-    await QtumBalance.deleteMany({height: {$gt: this._tip.height}})
   }
 
   async onReorg(height) {
@@ -196,7 +195,6 @@ export default class TransactionService extends Service {
         }
       }
     ])
-    await QtumBalance.deleteMany({height: {$gt: height}})
   }
 
   async onBlock(block) {
@@ -206,27 +204,24 @@ export default class TransactionService extends Service {
     for (let i = 0; i < block.transactions.length; ++i) {
       await this._processTransaction(block.transactions[i], i, block)
     }
-    if (block.height > 0) {
-      await this._updateBalances(block.height)
-    }
     this._tip.height = block.height
     this._tip.hash = block.hash
     await this.node.updateServiceTip(this.name, this._tip)
   }
 
   async _processTransaction(tx, indexInBlock, block) {
-    let resultTransaction = await Transaction.findOne({id: tx.id.toString('hex')})
+    let resultTransaction = await Transaction.findOne({id: tx.id})
     if (resultTransaction) {
       await TransactionOutput.bulkWrite([
         {
           updateMany: {
-            filter: {'input.transactionId': tx.id.toString('hex')},
+            filter: {'input.transactionId': tx.id},
             update: {'input.height': block.height}
           }
         },
         {
           updateMany: {
-            filter: {'output.transactionId': tx.id.toString('hex')},
+            filter: {'output.transactionId': tx.id},
             update: {'output.height': block.height}
           }
         }
@@ -241,96 +236,100 @@ export default class TransactionService extends Service {
       return
     }
 
-    let balanceChanges = []
-
-    let inputs = await Promise.all(
-      tx.inputs.map(async (input, index) => {
-        let txo
-        if (Buffer.compare(input.prevTxId, Buffer.alloc(32)) === 0 && input.outputIndex === 0xffffffff) {
-          txo = await TransactionOutput.create({
-            input: {
-              height: block.height,
-              transactionId: tx.id,
-              index,
-              scriptSig: input.scriptSig.toBuffer(),
-              sequence: input.sequence
-            }
-          })
-        } else {
-          txo = await TransactionOutput.findOne({
-            'output.transactionId': input.prevTxId.toString('hex'),
-            'output.index': input.outputIndex
-          })
-          let invalidTxId = txo.input && txo.input.transactionId.toString('hex')
-          txo.input = {
-            height: block.height,
-            transactionId: tx.id,
-            index,
-            scriptSig: input.scriptSig.toBuffer(),
-            sequence: input.sequence
-          }
-          await txo.save()
-          if (invalidTxId) {
-            await Transaction.deleteOne({id: invalidTxId})
-            await TransactionOutput.bulkWrite([
-              {deleteMany: {filter: {'output.transactionId': invalidTxId}}},
-              {
-                updateMany: {
-                  filter: {'input.transactionId': invalidTxId},
-                  update: {$unset: {input: ''}}
-                }
+    let inputOperations = tx.inputs.map((input, index) => {
+      if (Buffer.compare(input.prevTxId, Buffer.alloc(32)) === 0 && input.outputIndex === 0xffffffff) {
+        return {
+          insertOne: {
+            document: {
+              input: {
+                height: block.height,
+                transactionId: tx.id,
+                index,
+                scriptSig: input.scriptSig.toBuffer(),
+                sequence: input.sequence
               }
-            ])
+            }
           }
         }
-        if (txo.value) {
-          balanceChanges.push({address: txo.address, value: -txo.value})
-        }
-        return txo._id
-      })
-    )
-
-    let outputs = await Promise.all(
-      tx.outputs.map(async (output, index) => {
-        let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
-        if (address && address.type === Address.PAY_TO_PUBLIC_KEY) {
-          address.type = Address.PAY_TO_PUBLIC_KEY_HASH
-        }
-        let txo = await TransactionOutput.create({
-          output: {
-            height: block.height,
-            transactionId: tx.id,
-            index,
-            scriptPubKey: output.scriptPubKey.toBuffer()
-          },
-          value: output.value,
-          ...address ? {address: {type: address.type, hex: address.data}} : {},
-          isStake: tx.outputs[0].scriptPubKey.isEmpty()
-        })
-        if (txo.value) {
-          balanceChanges.push({address: txo.address, value: txo.value})
-        }
-        return txo._id
-      })
-    )
-
-    let balanceMapping = {}
-    for (let {address, value} of balanceChanges) {
-      if (address) {
-        let addressKey = `${address.type}:${address.hex.toString('hex')}`
-        balanceMapping[addressKey] = addressKey in balanceMapping ? balanceMapping[addressKey] + value : value
       } else {
-        balanceMapping[''] = '' in balanceMapping ? balanceMapping[''] + value : value
+        return {
+          updateOne: {
+            filter: {
+              'output.transactionId': input.prevTxId,
+              'output.index': input.outputIndex
+            },
+            update: {
+              input: {
+                height: block.height,
+                transactionId: tx.id,
+                index,
+                scriptSig: input.scriptSig.toBuffer(),
+                sequence: input.sequence
+              }
+            }
+          }
+        }
       }
-    }
-    balanceChanges = []
-    for (let [addressKey, value] of Object.entries(balanceMapping)) {
-      let address = null
-      if (addressKey) {
-        let [type, data] = addressKey.split(':')
-        address = {type, hex: Buffer.from(data, 'hex')}
+    })
+    await TransactionOutput.bulkWrite(inputOperations)
+
+    let outputTxos = tx.outputs.map((output, index) => {
+      let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
+      if (address && address.type === Address.PAY_TO_PUBLIC_KEY) {
+        address.type = Address.PAY_TO_PUBLIC_KEY_HASH
       }
-      balanceChanges.push({...address ? {address} : {}, value})
+      return {
+        output: {
+          height: block.height,
+          transactionId: tx.id,
+          index,
+          scriptPubKey: output.scriptPubKey.toBuffer()
+        },
+        value: output.value,
+        ...address ? {address: {type: address.type, hex: address.data}} : {},
+        isStake: tx.outputs[0].scriptPubKey.isEmpty()
+      }
+    })
+    await TransactionOutput.insertMany(outputTxos)
+
+    let balanceChanges = await TransactionOutput.aggregate([
+      {
+        $match: {
+          value: {$ne: 0},
+          $or: [
+            {'input.transactionId': tx.id.toString('hex')},
+            {'output.transactionId': tx.id.toString('hex')},
+          ]
+        }
+      },
+      {
+        $project: {
+          address: '$address',
+          value: {
+            $cond: {
+              if: {$eq: ['$input.transactionId', tx.id.toString('hex')]},
+              then: {$subtract: [0, '$value']},
+              else: '$value'
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$address',
+          value: {$sum: '$value'}
+        }
+      },
+      {
+        $project: {
+          _id: false,
+          address: '$_id',
+          value: '$value'
+        }
+      }
+    ])
+    for (let item of balanceChanges) {
+      item.value = toBigInt(item.value)
     }
 
     let latestItem = await Transaction.findOne(
@@ -344,8 +343,6 @@ export default class TransactionService extends Service {
       version: tx.version,
       marker: tx.marker,
       flag: tx.flag,
-      inputs,
-      outputs,
       witnesses: tx.witnesses,
       lockTime: tx.lockTime,
       block: {
@@ -359,68 +356,5 @@ export default class TransactionService extends Service {
       balanceChanges: block.height === 0 ? [] : balanceChanges,
       createIndex: latestItem ? latestItem.createIndex + 1 : 0
     })
-  }
-
-  async _updateBalances(height) {
-    let balances = await Transaction.aggregate([
-      {$match: {'block.height': height}},
-      {$unwind: '$balanceChanges'},
-      {$match: {'balanceChanges.address': {$ne: null}}},
-      {
-        $group: {
-          _id: '$balanceChanges.address',
-          value: {$sum: '$balanceChanges.value'}
-        }
-      },
-      {$match: {value: {$ne: 0}}},
-      {
-        $project: {
-          _id: false,
-          address: '$_id',
-          value: '$value'
-        }
-      },
-      {
-        $lookup: {
-          from: 'qtumbalances',
-          localField: 'address',
-          foreignField: 'address',
-          as: 'originals'
-        }
-      },
-      {
-        $project: {
-          address: '$address',
-          value: '$value',
-          originals: {
-            $concatArrays: [
-              '$originals',
-              [{height: 0, balance: 0}]
-            ]
-          }
-        }
-      },
-      {$unwind: '$originals'},
-      {$sort: {'originals.height': -1}},
-      {
-        $group: {
-          _id: '$address',
-          value: {$first: '$value'},
-          balance: {$first: '$originals.balance'}
-        }
-      },
-      {
-        $project: {
-          _id: false,
-          address: '$_id',
-          balance: {$add: ['$balance', '$value']}
-        }
-      }
-    ])
-    for (let item of balances) {
-      item.height = height
-      item.balance = BigInttoLong(toBigInt(item.balance))
-    }
-    await QtumBalance.collection.insertMany(balances)
   }
 }

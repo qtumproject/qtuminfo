@@ -68,8 +68,6 @@ const transactionSchema = new mongoose.Schema({
   version: Number,
   marker: Number,
   flag: Number,
-  inputs: [mongoose.Schema.Types.ObjectId],
-  outputs: [mongoose.Schema.Types.ObjectId],
   witnesses: [[Buffer]],
   lockTime: Number,
   block: blockSchema,
