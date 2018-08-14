@@ -14,7 +14,7 @@ const blockSchema = new mongoose.Schema({
 }, {_id: false})
 
 const balanceChangesSchema = new mongoose.Schema({
-  address: {type: addressSchema, index: true},
+  address: addressSchema,
   value: {
     type: mongoose.Schema.Types.Long,
     get: LongtoBigInt,

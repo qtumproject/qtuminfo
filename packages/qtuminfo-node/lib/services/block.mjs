@@ -319,7 +319,7 @@ export default class BlockService extends Service {
     if (Buffer.compare(block.header.prevHash, this._tip.hash) === 0) {
       await this._saveBlock(block)
     } else {
-      this._processBlock = false
+      this._processingBlock = false
     }
   }
 
@@ -424,7 +424,7 @@ export default class BlockService extends Service {
     try {
       let diff = await this._getTimeSinceLastBlock()
       this.logger.info(
-        'Block Servie: the best block hash is:', this._tip.hash.toString('hex'),
+        'Block Service: the best block hash is:', this._tip.hash.toString('hex'),
         'at height:', `${this._tip.height}.`,
         'Time between the last 2 blocks:', diff
       )
