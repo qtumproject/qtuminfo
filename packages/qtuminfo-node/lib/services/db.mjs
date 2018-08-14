@@ -1,3 +1,4 @@
+import fs from 'fs'
 import mongoose from 'mongoose'
 import {Header as RawHeader} from 'qtuminfo-lib'
 import Rpc from 'qtuminfo-rpc'
@@ -58,6 +59,11 @@ export default class DbService extends Service {
         useNewUrlParser: true
       }
     )
+    try {
+      await fs.promises.access(this.node.datadir)
+    } catch (err) {
+      await fs.promises.mkdir(this.node.datadir)
+    }
   }
 
   async stop() {
