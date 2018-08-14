@@ -14,3 +14,6 @@ export {default as Script, InvalidScriptError} from './script/script'
 export {default as Transaction} from './transaction/transaction'
 export {default as Input} from './transaction/input'
 export {default as Output} from './transaction/output'
+
+import * as Solidity from './solidity/abi'
+export {Solidity}
