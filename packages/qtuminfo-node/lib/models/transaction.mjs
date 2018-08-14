@@ -13,8 +13,8 @@ const blockSchema = new mongoose.Schema({
   timestamp: {type: Number, index: true}
 }, {_id: false})
 
-const balanceChangeSchema = new mongoose.Schema({
-  address: addressSchema,
+const balanceChangesSchema = new mongoose.Schema({
+  address: {type: addressSchema, index: true},
   value: {
     type: mongoose.Schema.Types.Long,
     get: LongtoBigInt,
@@ -73,11 +73,12 @@ const transactionSchema = new mongoose.Schema({
   block: blockSchema,
   index: Number,
   size: Number,
-  balanceChanges: [balanceChangeSchema],
+  balanceChanges: [balanceChangesSchema],
   receipts: [receiptSchema],
   createIndex: {type: Number, index: true}
 })
 
+transactionSchema.index({'balanceChanges.address': 1})
 transactionSchema.index({'block.height': 1, index: 1})
 
 export default mongoose.model('Transaction', transactionSchema)

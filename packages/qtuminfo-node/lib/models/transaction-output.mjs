@@ -33,7 +33,7 @@ inputSchema.index({transactionId: 1, index: 1})
 const transactionOutputSchema = new mongoose.Schema({
   output: outputSchema,
   input: inputSchema,
-  address: addressSchema,
+  address: {type: addressSchema, index: true},
   value: {
     type: mongoose.Schema.Types.Long,
     default: mongoose.Types.Long(0),

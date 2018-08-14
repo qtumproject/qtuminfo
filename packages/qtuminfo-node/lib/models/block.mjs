@@ -26,7 +26,7 @@ const blockSchema = new mongoose.Schema({
   weight: Number,
   transactions: [String],
   transactionCount: Number,
-  miner: addressSchema,
+  miner: {type: addressSchema, index: true},
   coinStakeValue: {
     type: mongoose.Schema.Types.Long,
     get: LongtoBigInt,

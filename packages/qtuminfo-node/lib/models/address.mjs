@@ -11,8 +11,6 @@ const addressSchema = new mongoose.Schema({
   }
 }, {_id: false})
 
-addressSchema.index({hex: 1, type: 1})
-
 addressSchema.method('getRawAddress', function() {
   return new Address({type: this.type, data: this.hex, chain: mongoose.chain})
 })
