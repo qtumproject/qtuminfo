@@ -107,20 +107,20 @@ RpcClient.loggers = {
 RpcClient.config = {logger: 'normal'}
 
 const callspec = {
-  callContract: '',
-  estimateFee: 'int',
-  estimatePriority: 'int',
-  estimateSmartFee: 'int',
-  estimateSmartPriority: 'int',
-  getContractCode: '',
-  getStakingInfo: '',
-  getStorage: '',
-  getTransactionReceipt: '',
-  listContracts: 'int int',
-  preciousBlock: '',
-  searchLogs: 'int int',
-  sendRawTransaction: '',
-  waitForLogs: ''
+  callcontract: '',
+  estimatefee: 'int',
+  estimatepriority: 'int',
+  estimatesmartfee: 'int',
+  estimatesmartpriority: 'int',
+  getcontractcode: '',
+  getstakinginfo: '',
+  getstorage: '',
+  gettransactionreceipt: '',
+  listcontracts: 'int int',
+  preciousblock: '',
+  searchlogs: 'int int',
+  sendrawtransaction: '',
+  waitforlogs: ''
 }
 
 function getRandomId() {
@@ -129,7 +129,6 @@ function getRandomId() {
 
 function generateRPCMethods() {
   function createRPCMethod(methodName, argMap) {
-    /* eslint-disable no-invalid-this */
     return function(...args) {
       for (let i = 0; i < args.length; i++) {
         if (argMap[i]) {
@@ -151,7 +150,6 @@ function generateRPCMethods() {
         })
       }
     }
-    /* eslint-enable no-invalid-this */
   }
 
   let types = {
@@ -171,8 +169,7 @@ function generateRPCMethods() {
         spec[i] = types.str
       }
     }
-    let methodName = key.toLowerCase()
-    RpcClient.prototype[methodName] = RpcClient.prototype[key] = createRPCMethod(methodName, spec)
+    RpcClient.prototype[key] = createRPCMethod(key, spec)
   }
 }
 
