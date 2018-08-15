@@ -143,10 +143,11 @@ export default class BlockService extends Service {
 
   async _onReorg(blocks) {
     let targetHeight = blocks[blocks.length - 1].height - 1
+    let targetHash = (await Block.findOne({height: targetHeight}, 'hash')).hash
     try {
       for (let service of this.node.getServicesByOrder().reverse()) {
         this.logger.info('Block Service: reorging', service.name, 'service')
-        await service.onReorg(targetHeight)
+        await service.onReorg(targetHeight, targetHash)
       }
     } catch (err) {
       this._handleError(err)

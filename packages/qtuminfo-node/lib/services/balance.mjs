@@ -10,6 +10,7 @@ export default class BalanceService extends Service {
   constructor(options) {
     super(options)
     this._tip = null
+    this._processing = false
   }
 
   static get dependencies() {
@@ -21,20 +22,23 @@ export default class BalanceService extends Service {
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
       this._tip = {height: blockTip.height, hash: blockTip.hash}
+      await this._rebuildBalances()
+      await this.updateServiceTip(this.name, this._tip)
     }
-    let maxHeight = await QtumBalance.findOne(
-      {},
-      'height',
-      {sort: {height: -1}, limit: 1, lean: true}
-    )
-    if (maxHeight && maxHeight.height > this._tip.height) {
-      await this.onReorg(this._tip.height)
-    }
-    await AddressInfo.deleteMany({createHeight: {$gt: this._tip.height}})
-    await this.node.updateServiceTip(this.name, this._tip)
+  }
+
+  async stop() {
+    await new Promise(resolve => {
+      setInterval(() => {
+        if (!this._processing) {
+          resolve()
+        }
+      }, 0)
+    })
   }
 
   async onBlock(block) {
+    this._processing = true
     if (block.height === 0) {
       let contracts = [0x80, 0x81, 0x82, 0x83, 0x84].map(x => Buffer.concat([Buffer.alloc(19), Buffer.from([x])]))
       await QtumBalance.insertMany(
@@ -54,6 +58,7 @@ export default class BalanceService extends Service {
         })),
         {ordered: false}
       )
+      this._processing = false
       return
     }
 
@@ -150,28 +155,73 @@ export default class BalanceService extends Service {
     this._tip.height = block.height
     this._tip.hash = block.hash
     await this.node.updateServiceTip(this.name, this._tip)
+    this._processing = false
   }
 
-  async onReorg(height) {
-    await QtumBalance.deleteMany({height: {$gt: height}})
-    await AddressInfo.bulkWrite([
-      {deleteMany: {filter: {height: {$gt: height}}}},
+  async onReorg(height, hash) {
+    this._processing = true
+    let balanceChanges = await Transaction.aggregate([
+      {$match: {'block.height': {$gt: this._tip.height}}},
+      {$unwind: '$balanceChanges'},
+      {$match: {'balanceChanges.address': {$ne: null}}},
       {
-        updateMany: {
-          filter: {},
-          update: {balance: 0n}
+        $group: {
+          _id: '$balanceChanges.address',
+          value: {$sum: '$balanceChanges.value'}
         }
-      }
+      },
+      {
+        $project: {
+          _id: false,
+          address: '$_id',
+          balance: '$value'
+        }
+      },
+      {$match: {balance: {$ne: 0}}},
+      {$sort: {'address.hex': 1, 'addresss.type': 1}}
     ])
+    if (balanceChanges.length) {
+      let originalBalances = await AddressInfo.collection.find(
+        {address: {$in: balanceChanges.map(item => item.address)}},
+        {sort: {'address.hex': 1, 'address.type': 1}}
+      ).toArray()
+      let mergeResult = []
+      for (let i = 0; i < balanceChanges.length; ++i) {
+        mergeResult.push({
+          address: balanceChanges[i].address,
+          balance: BigInttoLong(toBigInt(originalBalances[i].balance) - toBigInt(balanceChanges[i].balance))
+        })
+      }
+      await AddressInfo.collection.bulkWrite(
+        mergeResult.map(({address, balance}) => ({
+          updateOne: {
+            filter: {address},
+            update: {$set: {balance}},
+            upsert: true
+          }
+        }))
+      )
+    }
+    await AddressInfo.deleteMany({createHeight: {$gt: height}})
+    await QtumBalance.deleteMany({height: {$gt: height}})
+    this._tip.height = height
+    this._tip.hash = hash
+    await this.node.updateServiceTip(this.name, this._tip)
+    this._processing = false
+  }
+
+  async _rebuildBalances() {
+    this._processing = true
+    await QtumBalance.deleteMany({height: {$gt: this._tip.height}})
     let balances = await TransactionOutput.aggregate([
       {
         $match: {
           address: {$ne: null},
           value: {$ne: 0},
-          'output.height': {$gt: 0, $lte: height},
+          'output.height': {$gt: 0, $lte: this._tip.height},
           $or: [
             {input: null},
-            {'input.height': {$gt: height}}
+            {'input.height': {$gt: this._tip.height}}
           ]
         }
       },
@@ -189,14 +239,21 @@ export default class BalanceService extends Service {
         }
       }
     ])
-    await AddressInfo.collection.bulkWrite(
-      balances.map(({address, balance}) => ({
+    await AddressInfo.bulkWrite([
+      {deleteMany: {filter: {height: {$gt: this._tip.height}}}},
+      {
+        updateMany: {
+          filter: {},
+          update: {balance: 0n}
+        }
+      },
+      ...balances.map(({address, balance}) => ({
         updateOne: {
           filter: {address},
-          update: {$set: {balance: BigInttoLong(toBigInt(balance))}}
+          update: {$set: {balance}}
         }
-      })),
-      {ordered: false}
-    )
+      }))
+    ])
+    this._processing = false
   }
 }
