@@ -8,7 +8,8 @@ const types = {
   PAY_TO_WITNESS_KEY_HASH: 'witness_v0_keyhash',
   PAY_TO_WITNESS_SCRIPT_HASH: 'witness_v0_scripthash',
   CONTRACT_CREATE: 'create',
-  CONTRACT_CALL: 'call'
+  CONTRACT_CALL: 'call',
+  CONTRACT: 'contract'
 }
 
 export default class Address {

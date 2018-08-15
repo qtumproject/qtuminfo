@@ -1,6 +1,7 @@
 import {Address, Script, Input, Output} from 'qtuminfo-lib'
 import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
+import QtumBalanceChanges from '../models/qtum-balance-changes'
 import Service from './base'
 import {toBigInt} from '../utils'
 
@@ -53,7 +54,6 @@ export default class TransactionService extends Service {
           lockTime: {$first: '$lockTime'},
           block: {$first: '$block'},
           size: {$first: '$size'},
-          balanceChanges: {$first: '$balanceChanges'},
           receipts: {$first: '$receipts'}
         }
       },
@@ -87,8 +87,15 @@ export default class TransactionService extends Service {
           lockTime: {$first: '$lockTime'},
           block: {$first: '$block'},
           size: {$first: '$size'},
-          balanceChanges: {$first: '$balanceChanges'},
           receipts: {$first: '$receipts'}
+        }
+      },
+      {
+        $lookup: {
+          from: 'qtumbalancechanges',
+          localField: 'id',
+          foreignField: 'id',
+          as: 'balanceChanges'
         }
       }
     ])
@@ -160,6 +167,7 @@ export default class TransactionService extends Service {
         }
       }
     ])
+    await QtumBalanceChanges.deleteMany({'block.height': {$gt: this._tip.height}})
     await this.node.updateServiceTip(this.name, this._tip)
   }
 
@@ -195,6 +203,10 @@ export default class TransactionService extends Service {
         }
       }
     ])
+    await QtumBalanceChanges.updateMany(
+      {'block.height': {$gt: this._tip.height}},
+      {block: {height: 0xffffffff}}
+    )
   }
 
   async onBlock(block) {
@@ -279,7 +291,7 @@ export default class TransactionService extends Service {
         if (address.type === Address.PAY_TO_PUBLIC_KEY) {
           address.type = Address.PAY_TO_PUBLIC_KEY_HASH
         } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
-          address.type = 'contract'
+          address.type = Address.CONTRACT
         }
       }
       return {
@@ -296,50 +308,53 @@ export default class TransactionService extends Service {
     })
     await TransactionOutput.insertMany(outputTxos, {ordered: false})
 
-    let balanceChanges = await TransactionOutput.aggregate([
-      {
-        $match: {
-          $or: [
-            {'input.transactionId': tx.id.toString('hex')},
-            {'output.transactionId': tx.id.toString('hex')},
-          ]
-        }
-      },
-      {
-        $project: {
-          address: '$address',
-          value: {
-            $cond: {
-              if: {$eq: ['$input.transactionId', tx.id.toString('hex')]},
-              then: {$subtract: [0, '$value']},
-              else: '$value'
+    if (block.height > 0) {
+      let balanceChanges = await TransactionOutput.aggregate([
+        {
+          $match: {
+            $or: [
+              {'input.transactionId': tx.id.toString('hex')},
+              {'output.transactionId': tx.id.toString('hex')},
+            ]
+          }
+        },
+        {
+          $project: {
+            address: '$address',
+            value: {
+              $cond: {
+                if: {$eq: ['$input.transactionId', tx.id.toString('hex')]},
+                then: {$subtract: [0, '$value']},
+                else: '$value'
+              }
             }
           }
+        },
+        {
+          $group: {
+            _id: '$address',
+            value: {$sum: '$value'}
+          }
+        },
+        {
+          $project: {
+            _id: false,
+            address: '$_id',
+            value: '$value'
+          }
         }
-      },
-      {
-        $group: {
-          _id: '$address',
-          value: {$sum: '$value'}
+      ])
+      for (let item of balanceChanges) {
+        item.id = tx.id
+        item.block = {
+          hash: block.hash,
+          height: block.height,
         }
-      },
-      {
-        $project: {
-          _id: false,
-          address: '$_id',
-          value: '$value'
-        }
+        item.value = toBigInt(item.value)
       }
-    ])
-    for (let item of balanceChanges) {
-      item.value = toBigInt(item.value)
+      await QtumBalanceChanges.insertMany(balanceChanges, {ordered: false})
     }
 
-    let latestItem = await Transaction.findOne(
-      {},
-      'createIndex',
-      {sort: {createIndex: -1}, limit: 1}
-    )
     await Transaction.create({
       id: tx.id,
       hash: tx.hash,
@@ -355,9 +370,7 @@ export default class TransactionService extends Service {
       },
       index: indexInBlock,
       size: tx.size,
-      weight: tx.weight,
-      balanceChanges: block.height === 0 ? [] : balanceChanges,
-      createIndex: latestItem ? latestItem.createIndex + 1 : 0
+      weight: tx.weight
     })
   }
 }

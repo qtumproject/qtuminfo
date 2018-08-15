@@ -3,6 +3,7 @@ import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
 import Service from './base'
 import {toBigInt} from '../utils'
+import QtumBalanceChanges from '../models/qtum-balance-changes'
 
 export default class MempoolService extends Service {
   constructor(options) {
@@ -112,14 +113,11 @@ export default class MempoolService extends Service {
       }
     ])
     for (let item of balanceChanges) {
+      item.id = tx.id
       item.value = toBigInt(item.value)
     }
+    await QtumBalanceChanges.insertMany(balanceChanges, {ordered: false})
 
-    let latestItem = await Transaction.findOne(
-      {},
-      'createIndex',
-      {sort: {createIndex: -1}, limit: 1}
-    )
     await Transaction.create({
       id: tx.id,
       hash: tx.hash,
@@ -129,9 +127,7 @@ export default class MempoolService extends Service {
       witnesses: tx.witnesses,
       lockTime: tx.lockTime,
       size: tx.size,
-      weight: tx.weight,
-      balanceChanges,
-      createIndex: latestItem ? latestItem.createIndex + 1 : 0
+      weight: tx.weight
     })
     // TODO subscriptions
   }

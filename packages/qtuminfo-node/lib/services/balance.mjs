@@ -1,6 +1,6 @@
 import {Address} from 'qtuminfo-lib'
-import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
+import QtumBalanceChanges from '../models/qtum-balance-changes'
 import AddressInfo from '../models/address-info'
 import QtumBalance from '../models/qtum-balance'
 import Service from './base'
@@ -23,35 +23,31 @@ export default class BalanceService extends Service {
     if (this._tip.height > blockTip.height) {
       this._tip = {height: blockTip.height, hash: blockTip.hash}
       await this._rebuildBalances()
-      await this.updateServiceTip(this.name, this._tip)
+      await this.node.updateServiceTip(this.name, this._tip)
     }
   }
 
   async stop() {
-    await new Promise(resolve => {
-      setInterval(() => {
-        if (!this._processing) {
-          resolve()
-        }
-      }, 0)
-    })
+    await this._waitUntilProcessed()
   }
 
   async onBlock(block) {
     this._processing = true
     if (block.height === 0) {
-      let contracts = [0x80, 0x81, 0x82, 0x83, 0x84].map(x => Buffer.concat([Buffer.alloc(19), Buffer.from([x])]))
+      let contracts = [0x80, 0x81, 0x82, 0x83, 0x84].map(
+        x => Buffer.concat([Buffer.alloc(19), Buffer.from([x])])
+      )
       await QtumBalance.insertMany(
         contracts.map(address => ({
           height: 0,
-          address: {type: 'contract', hex: address},
+          address: {type: Address.CONTRACT, hex: address},
           balance: 0n
         })),
         {ordered: false}
       )
       await AddressInfo.insertMany(
         contracts.map(address => ({
-          address: {type: 'contract', hex: address},
+          address: {type: Address.CONTRACT, hex: address},
           string: address.toString('hex'),
           balance: 0n,
           createHeight: 0
@@ -62,14 +58,17 @@ export default class BalanceService extends Service {
       return
     }
 
-    let balanceChanges = await Transaction.aggregate([
-      {$match: {'block.height': block.height}},
-      {$unwind: '$balanceChanges'},
-      {$match: {'balanceChanges.address': {$ne: null}}},
+    let balanceChanges = await QtumBalanceChanges.aggregate([
+      {
+        $match: {
+          'block.height': block.height,
+          address: {$ne: null}
+        }
+      },
       {
         $group: {
-          _id: '$balanceChanges.address',
-          value: {$sum: '$balanceChanges.value'}
+          _id: '$address',
+          value: {$sum: '$value'}
         }
       },
       {
@@ -79,11 +78,11 @@ export default class BalanceService extends Service {
           balance: '$value'
         }
       },
-      {$sort: {'address.hex': 1, 'addresss.type': 1}}
+      {$sort: {address: 1}}
     ])
     let originalBalances = await AddressInfo.collection.find(
       {address: {$in: balanceChanges.map(item => item.address)}},
-      {sort: {'address.hex': 1, 'address.type': 1}}
+      {sort: {address: 1}}
     ).toArray()
     let mergeResult = []
     for (let i = 0, j = 0; i < balanceChanges.length; ++i) {
@@ -160,14 +159,17 @@ export default class BalanceService extends Service {
 
   async onReorg(height, hash) {
     this._processing = true
-    let balanceChanges = await Transaction.aggregate([
-      {$match: {'block.height': {$gt: this._tip.height}}},
-      {$unwind: '$balanceChanges'},
-      {$match: {'balanceChanges.address': {$ne: null}}},
+    let balanceChanges = await QtumBalanceChanges.aggregate([
+      {
+        $match: {
+          'block.height': {$gt: this._tip.height},
+          'balanceChanges.address': {$ne: null}
+        }
+      },
       {
         $group: {
-          _id: '$balanceChanges.address',
-          value: {$sum: '$balanceChanges.value'}
+          _id: '$address',
+          value: {$sum: '$value'}
         }
       },
       {
@@ -179,7 +181,7 @@ export default class BalanceService extends Service {
       },
       {$match: {balance: {$ne: 0}}},
       {$sort: {'address.hex': 1, 'addresss.type': 1}}
-    ])
+    ]).allowDiskUse(true)
     if (balanceChanges.length) {
       let originalBalances = await AddressInfo.collection.find(
         {address: {$in: balanceChanges.map(item => item.address)}},
@@ -208,6 +210,19 @@ export default class BalanceService extends Service {
     this._tip.hash = hash
     await this.node.updateServiceTip(this.name, this._tip)
     this._processing = false
+  }
+
+  async _waitUntilProcessed() {
+    if (this._processing) {
+      await new Promise(resolve => {
+        let interval = setInterval(() => {
+          if (!this._processing) {
+            clearInterval(interval)
+            resolve()
+          }
+        }, 0)
+      })
+    }
   }
 
   async _rebuildBalances() {
