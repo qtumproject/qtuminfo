@@ -271,12 +271,16 @@ export default class TransactionService extends Service {
         }
       }
     })
-    await TransactionOutput.bulkWrite(inputOperations)
+    await TransactionOutput.bulkWrite(inputOperations, {ordered: false})
 
     let outputTxos = tx.outputs.map((output, index) => {
       let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
-      if (address && address.type === Address.PAY_TO_PUBLIC_KEY) {
-        address.type = Address.PAY_TO_PUBLIC_KEY_HASH
+      if (address) {
+        if (address.type === Address.PAY_TO_PUBLIC_KEY) {
+          address.type = Address.PAY_TO_PUBLIC_KEY_HASH
+        } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
+          address.type = 'contract'
+        }
       }
       return {
         output: {
@@ -290,12 +294,11 @@ export default class TransactionService extends Service {
         isStake: tx.outputs[0].scriptPubKey.isEmpty()
       }
     })
-    await TransactionOutput.insertMany(outputTxos)
+    await TransactionOutput.insertMany(outputTxos, {ordered: false})
 
     let balanceChanges = await TransactionOutput.aggregate([
       {
         $match: {
-          value: {$ne: 0},
           $or: [
             {'input.transactionId': tx.id.toString('hex')},
             {'output.transactionId': tx.id.toString('hex')},

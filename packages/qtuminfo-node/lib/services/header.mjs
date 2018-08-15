@@ -169,7 +169,7 @@ export default class HeaderService extends Service {
           )
           this._onHeader(header)
         }
-        await Header.insertMany(transformedHeaders)
+        await Header.insertMany(transformedHeaders, {ordered: false})
       }
       await this.node.updateServiceTip(this.name, this._tip)
       await this._onHeadersSave()
