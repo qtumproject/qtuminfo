@@ -29,7 +29,6 @@ export default class ContractService extends Service {
     let blockTip = await this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
       this._tip = {height: blockTip.height, hash: blockTip.hash}
-      await this.node.updateServiceTip(this.name, this._tip)
     }
     try {
       await fs.promises.access(this._contractCodeDirectory)
@@ -46,6 +45,7 @@ export default class ContractService extends Service {
       )
     }
     await Contract.deleteMany({createHeight: {$gt: this._tip.height}})
+    await this.node.updateServiceTip(this.name, this._tip)
   }
 
   async onBlock(block) {

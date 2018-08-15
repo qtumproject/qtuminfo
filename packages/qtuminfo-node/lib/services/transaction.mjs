@@ -149,7 +149,6 @@ export default class TransactionService extends Service {
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
       this._tip = {height: blockTip.height, hash: blockTip.hash}
-      await this.node.updateServiceTip(this.name, this._tip)
     }
     await Transaction.deleteMany({'block.height': {$gt: this._tip.height}})
     await TransactionOutput.bulkWrite([
@@ -161,6 +160,7 @@ export default class TransactionService extends Service {
         }
       }
     ])
+    await this.node.updateServiceTip(this.name, this._tip)
   }
 
   async onReorg(height) {

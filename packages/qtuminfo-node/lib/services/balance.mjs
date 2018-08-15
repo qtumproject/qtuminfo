@@ -21,7 +21,6 @@ export default class BalanceService extends Service {
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
       this._tip = {height: blockTip.height, hash: blockTip.hash}
-      await this.node.updateServiceTip(this.name, this._tip)
     }
     let maxHeight = await QtumBalance.findOne(
       {},
@@ -29,9 +28,10 @@ export default class BalanceService extends Service {
       {sort: {height: -1}, limit: 1, lean: true}
     )
     if (maxHeight && maxHeight.height > this._tip.height) {
-      this.onReorg(this._tip.height)
+      await this.onReorg(this._tip.height)
     }
     await AddressInfo.deleteMany({createHeight: {$gt: this._tip.height}})
+    await this.node.updateServiceTip(this.name, this._tip)
   }
 
   async onBlock(block) {
@@ -170,7 +170,7 @@ export default class BalanceService extends Service {
           value: {$ne: 0},
           'output.height': {$gt: 0, $lte: height},
           $or: [
-            {$input: null},
+            {input: null},
             {'input.height': {$gt: height}}
           ]
         }
@@ -189,11 +189,11 @@ export default class BalanceService extends Service {
         }
       }
     ])
-    await AddressInfo.bulkWrite(
+    await AddressInfo.collection.bulkWrite(
       balances.map(({address, balance}) => ({
         updateOne: {
           filter: {address},
-          update: {$set: {balance}}
+          update: {$set: {balance: BigInttoLong(toBigInt(balance))}}
         }
       })),
       {ordered: false}
