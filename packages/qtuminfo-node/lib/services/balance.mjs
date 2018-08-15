@@ -1,6 +1,8 @@
+import {Address} from 'qtuminfo-lib'
 import Transaction from '../models/transaction'
+import TransactionOutput from '../models/transaction-output'
+import AddressInfo from '../models/address-info'
 import QtumBalance from '../models/qtum-balance'
-import QtumSnapshot from '../models/qtum-snapshot'
 import Service from './base'
 import {toBigInt, BigInttoLong} from '../utils'
 
@@ -18,16 +20,43 @@ export default class BalanceService extends Service {
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
-      await this.onReorg(blockTip.height)
       this._tip = {height: blockTip.height, hash: blockTip.hash}
       await this.node.updateServiceTip(this.name, this._tip)
     }
+    let maxHeight = await QtumBalance.findOne(
+      {},
+      'height',
+      {sort: {height: -1}, limit: 1, lean: true}
+    )
+    if (maxHeight && maxHeight.height > this._tip.height) {
+      this.onReorg(this._tip.height)
+    }
+    await AddressInfo.deleteMany({createHeight: {$gt: this._tip.height}})
   }
 
   async onBlock(block) {
     if (block.height === 0) {
+      let contracts = [0x80, 0x81, 0x82, 0x83, 0x84].map(x => Buffer.concat([Buffer.alloc(19), Buffer.from([x])]))
+      await QtumBalance.insertMany(
+        contracts.map(address => ({
+          height: 0,
+          address: {type: 'contract', hex: address},
+          balance: 0n
+        })),
+        {ordered: false}
+      )
+      await AddressInfo.insertMany(
+        contracts.map(address => ({
+          address: {type: 'contract', hex: address},
+          string: address.toString('hex'),
+          balance: 0n,
+          createHeight: 0
+        })),
+        {ordered: false}
+      )
       return
     }
+
     let balanceChanges = await Transaction.aggregate([
       {$match: {'block.height': block.height}},
       {$unwind: '$balanceChanges'},
@@ -38,7 +67,6 @@ export default class BalanceService extends Service {
           value: {$sum: '$balanceChanges.value'}
         }
       },
-      {$match: {value: {$ne: 0}}},
       {
         $project: {
           _id: false,
@@ -48,11 +76,32 @@ export default class BalanceService extends Service {
       },
       {$sort: {'address.hex': 1, 'addresss.type': 1}}
     ])
-    let originalBalances = await QtumSnapshot.collection.find(
+    let originalBalances = await AddressInfo.collection.find(
       {address: {$in: balanceChanges.map(item => item.address)}},
       {sort: {'address.hex': 1, 'address.type': 1}}
     ).toArray()
-    let mergeResult = mergeBalance(balanceChanges, originalBalances)
+    let mergeResult = []
+    for (let i = 0, j = 0; i < balanceChanges.length; ++i) {
+      if (
+        j >= originalBalances.length
+        || balanceChanges[i].address.type !== originalBalances[j].address.type
+        || balanceChanges[i].address.hex !== originalBalances[j].address.hex
+      ) {
+        mergeResult.push({
+          address: balanceChanges[i].address,
+          balance: BigInttoLong(toBigInt(balanceChanges[i].balance)),
+        })
+      } else {
+        if (toBigInt(balanceChanges[i].balance)) {
+          mergeResult.push({
+            address: balanceChanges[i].address,
+            balance: BigInttoLong(toBigInt(originalBalances[j].balance) + toBigInt(balanceChanges[i].balance))
+          })
+        }
+        ++j
+      }
+    }
+
     await QtumBalance.collection.bulkWrite(
       mergeResult.map(({address, balance}) => ({
         insertOne: {
@@ -62,17 +111,42 @@ export default class BalanceService extends Service {
             balance
           }
         }
-      }))
+      })),
+      {ordered: false}
     )
-    await QtumSnapshot.collection.bulkWrite(
+    let result = await AddressInfo.collection.bulkWrite(
       mergeResult.map(({address, balance}) => ({
         updateOne: {
           filter: {address},
           update: {$set: {balance}},
           upsert: true
         }
-      }))
+      })),
+      {ordered: false}
     )
+    let newAddressOperations = Object.keys(result.upsertedIds).map(index => {
+      let {address} = mergeResult[index]
+      let addressString = new Address({
+        type: address.type,
+        data: Buffer.from(address.hex, 'hex'),
+        chain: this.chain
+      }).toString()
+      return {
+        updateOne: {
+          filter: {address},
+          update: {
+            $set: {
+              string: addressString,
+              createHeight: block.height
+            }
+          }
+        }
+      }
+    })
+    if (newAddressOperations.length) {
+      await AddressInfo.collection.bulkWrite(newAddressOperations, {ordered: false})
+    }
+
     this._tip.height = block.height
     this._tip.hash = block.hash
     await this.node.updateServiceTip(this.name, this._tip)
@@ -80,12 +154,31 @@ export default class BalanceService extends Service {
 
   async onReorg(height) {
     await QtumBalance.deleteMany({height: {$gt: height}})
-    await QtumBalance.aggregate([
-      {$sort: {height: -1}},
+    await AddressInfo.bulkWrite([
+      {deleteMany: {filter: {height: {$gt: height}}}},
+      {
+        updateMany: {
+          filter: {},
+          update: {balance: 0n}
+        }
+      }
+    ])
+    let balances = await TransactionOutput.aggregate([
+      {
+        $match: {
+          address: {$ne: null},
+          value: {$ne: 0},
+          'output.height': {$gt: 0, $lte: height},
+          $or: [
+            {$input: null},
+            {'input.height': {$gt: height}}
+          ]
+        }
+      },
       {
         $group: {
           _id: '$address',
-          balance: {$first: '$balance'}
+          balance: {$sum: '$value'}
         }
       },
       {
@@ -94,66 +187,16 @@ export default class BalanceService extends Service {
           address: '$_id',
           balance: '$balance'
         }
-      },
-      {$out: 'qtumsnapshots'}
-    ]).allowDiskUse(true)
+      }
+    ])
+    await AddressInfo.bulkWrite(
+      balances.map(({address, balance}) => ({
+        updateOne: {
+          filter: {address},
+          update: {$set: {balance}}
+        }
+      })),
+      {ordered: false}
+    )
   }
-}
-
-function sortAddress({address: x}, {address: y}) {
-  if (x.hex < y.hex) {
-    return -1
-  } else if (x.hex > y.hex) {
-    return 1
-  } else if (x.type < y.type) {
-    return -1
-  } else if (x.type > y.type) {
-    return 1
-  } else {
-    return 0
-  }
-}
-
-function mergeBalance(x, y) {
-  let i = 0
-  let j = 0
-  let result = []
-  while (i < x.length && j < y.length) {
-    let comparison = sortAddress(x[i], y[j])
-    if (comparison < 0) {
-      result.push({
-        address: x[i].address,
-        balance: BigInttoLong(toBigInt(x[i].balance))
-      })
-      ++i
-    } else if (comparison > 0) {
-      result.push({
-        address: y[j].address,
-        balance: BigInttoLong(toBigInt(y[j].balance))
-      })
-      ++j
-    } else {
-      result.push({
-        address: x[i].address,
-        balance: BigInttoLong(toBigInt(x[i].balance) + toBigInt(y[j].balance))
-      })
-      ++i
-      ++j
-    }
-  }
-  while (i < x.length) {
-    result.push({
-      address: x[i].address,
-      balance: BigInttoLong(toBigInt(x[i].balance))
-    })
-    ++i
-  }
-  while (j < y.length) {
-    result.push({
-      address: y[j].address,
-      balance: BigInttoLong(toBigInt(y[j].balance))
-    })
-    ++j
-  }
-  return result
 }
