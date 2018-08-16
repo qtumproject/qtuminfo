@@ -1,4 +1,4 @@
-import {Address, Script, Input, Output} from 'qtuminfo-lib'
+import {Address, Script, Input, Output, Transaction as RawTransaction} from 'qtuminfo-lib'
 import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
 import QtumBalanceChanges from '../models/qtum-balance-changes'
@@ -16,7 +16,10 @@ export default class TransactionService extends Service {
   }
 
   get APIMethods() {
-    return {getTransaction: this.getTransaction.bind(this)}
+    return {
+      getTransaction: this.getTransaction.bind(this),
+      getRawTransaction: this.getRawTransaction.bind(this),
+    }
   }
 
   async getTransaction(id) {
@@ -114,9 +117,9 @@ export default class TransactionService extends Service {
           sequence: input.sequence
         })
         result.value = toBigInt(input.value)
-        result.address = input.address
-          ? new Address({type: input.address.type, data: input.address.hex, chain: this.chain})
-          : null
+        if (input.address) {
+          result.address = new Address({type: input.address.type, data: input.address.hex, chain: this.chain})
+        }
         return result
       }),
       outputs: transaction.outputs.map(output => {
@@ -124,22 +127,20 @@ export default class TransactionService extends Service {
           value: toBigInt(output.value),
           scriptPubKey: Script.fromBuffer(output.scriptPubKey.buffer)
         })
-        result.address = output.address
-          ? new Address({type: output.address.type, data: output.address.hex, chain: this.chain})
-          : null
+        result.address = Address.fromScript(result.scriptPubKey)
         return result
       }),
       witnesses: transaction.witnesses.map(witness => witness.map(item => item.buffer)),
       lockTime: transaction.lockTime,
-      ...transaction.block
-        ? {
+      ...transaction.block.height === 0xffffffff
+        ? {}
+        : {
           block: {
             hash: Buffer.from(transaction.block.hash, 'hex'),
             height: transaction.block.height,
             timestamp: transaction.block.timestamp
           }
-        }
-        : {},
+        },
       size: transaction.size,
       balanceChanges: transaction.balanceChanges.map(({address, value}) => ({
         address: address
@@ -149,6 +150,89 @@ export default class TransactionService extends Service {
       })),
       receipts: transaction.receipts
     }
+  }
+
+  async getRawTransaction(id) {
+    let [transaction] = await Transaction.aggregate([
+      {$match: {id: id.toString('hex')}},
+      {
+        $lookup: {
+          from: 'transactionoutputs',
+          localField: 'id',
+          foreignField: 'input.transactionId',
+          as: 'input'
+        }
+      },
+      {$unwind: '$input'},
+      {$sort: {'input.index': 1}},
+      {
+        $group: {
+          _id: '$_id',
+          id: {$first: '$id'},
+          hash: {$first: '$hash'},
+          version: {$first: '$version'},
+          marker: {$first: '$marker'},
+          flag: {$first: '$flag'},
+          inputs: {
+            $push: {
+              prevTxId: '$input.output.transactionId',
+              outputIndex: '$input.output.index',
+              scriptSig: '$input.input.scriptSig',
+              sequence: '$input.input.sequence'
+            }
+          },
+          witnesses: {$first: '$witnesses'},
+          lockTime: {$first: '$lockTime'}
+        }
+      },
+      {
+        $lookup: {
+          from: 'transactionoutputs',
+          localField: 'id',
+          foreignField: 'output.transactionId',
+          as: 'output'
+        }
+      },
+      {$unwind: '$output'},
+      {$sort: {'output.index': 1}},
+      {
+        $group: {
+          _id: '$_id',
+          id: {$first: '$id'},
+          hash: {$first: '$hash'},
+          version: {$first: '$version'},
+          marker: {$first: '$marker'},
+          flag: {$first: '$flag'},
+          inputs: {$first: '$inputs'},
+          outputs: {
+            $push: {
+              value: '$output.value',
+              scriptPubKey: '$output.output.scriptPubKey'
+            }
+          },
+          witnesses: {$first: '$witnesses'},
+          lockTime: {$first: '$lockTime'}
+        }
+      }
+    ])
+
+    return new RawTransaction({
+      version: transaction.version,
+      marker: transaction.marker,
+      flag: transaction.flag,
+      inputs: transaction.inputs.map(input => new Input({
+        prevTxId: 'prevTxId' in input ? Buffer.from(input.prevTxId, 'hex') : Buffer.alloc(32),
+        outputIndex: 'outputIndex' in input ? input.outputIndex : 0xffffffff,
+        scriptSig: Script.fromBuffer(input.scriptSig.buffer),
+        sequence: input.sequence
+      })),
+      outputs: transaction.outputs.map(output => new Output({
+        value: toBigInt(output.value),
+        scriptPubKey: Script.fromBuffer(output.scriptPubKey.buffer)
+      })),
+      witnesses: transaction.witnesses.map(witness => witness.map(item => item.buffer)),
+      lockTime: transaction.lockTime
+    })
   }
 
   async start() {
