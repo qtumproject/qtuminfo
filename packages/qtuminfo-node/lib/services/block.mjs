@@ -1,11 +1,11 @@
 import assert from 'assert'
 import LRU from 'lru-cache'
-import {Block as RawBlock, Address} from 'qtuminfo-lib'
+import {Header as RawHeader, Block as RawBlock, Address} from 'qtuminfo-lib'
 import Header from '../models/header'
 import Block from '../models/block'
 import TransactionOutput from '../models/transaction-output'
 import Service from './base'
-import {AsyncQueue} from '../utils'
+import {AsyncQueue, Buffer32toBigInt, LongtoBigInt} from '../utils'
 
 export default class BlockService extends Service {
   constructor(options) {
@@ -32,6 +32,7 @@ export default class BlockService extends Service {
     return {
       getBlockTip: this.getTip.bind(this),
       getBlock: this.getBlock.bind(this),
+      getRawBlock: this.getRawBlock.bind(this),
       syncPercentage: this.syncPercentage.bind(this),
       isSynced: this.isSynced.bind(this)
     }
@@ -46,7 +47,87 @@ export default class BlockService extends Service {
   }
 
   async getBlock(arg) {
-    return await Block.getBlock(Number.isInteger(arg) ? {height: arg} : {hash: arg.toString('hex')})
+    let filter = Number.isInteger(arg) ? {height: arg} : {hash: arg.toString('hex')}
+    let [block] = await this.aggregate([
+      {$match: filter},
+      {
+        $lookup: {
+          from: 'headers',
+          localField: 'hash',
+          foreignField: 'hash',
+          as: 'header'
+        }
+      },
+      {$addFields: {header: {$arrayElemAt: ['$header', 0]}}}
+    ])
+    if (!block) {
+      return null
+    }
+    let result = {
+      hash: Buffer.from(block.hash, 'hex'),
+      height: block.height,
+      version: block.header.version,
+      prevHash: Buffer.from(block.prevHash, 'hex'),
+      merkleRoot: block.header.merkleRoot.buffer,
+      bits: block.header.bits,
+      nonce: block.header.nonce,
+      hashStateRoot: block.header.hashStateRoot.buffer,
+      hashUTXORoot: block.header.hashUTXORoot.buffer,
+      prevOutStakeHash: block.header.prevOutStakeHash.buffer,
+      prevOutStakeN: block.header.prevOutStakeN,
+      vchBlockSig: block.header.vchBlockSig.buffer,
+      chainwork: Buffer32toBigInt(block.header.chainwork.buffer),
+      size: block.size,
+      weight: block.weight,
+      transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
+      miner: block.miner && new Address({
+        type: block.miner.type,
+        data: Buffer.from(block.miner.hex, 'hex')
+      }),
+      coinStakeValue: block.coinStakeValue && LongtoBigInt(block.coinStakeValue)
+    }
+    let nextBlock = await this.model('Header').findOne({height: block.height + 1}, 'hash', {lean: true})
+    result.nextHash = nextBlock && Buffer.from(nextBlock.hash, 'hex')
+    return result
+  }
+
+  async getRawBlock(hash) {
+    let [block] = await this.aggregate([
+      {$match: {hash: hash.toString('hex')}},
+      {
+        $lookup: {
+          from: 'headers',
+          localField: 'hash',
+          foreignField: 'hash',
+          as: 'header'
+        }
+      },
+      {$addFields: {header: {$arrayElemAt: ['$header', 0]}}}
+    ])
+    if (!block) {
+      return null
+    }
+    let transactions = []
+    for (let txid of block.transactions) {
+      transactions.push(await this.node.getRawTransaction(Buffer.from(txid, 'hex')))
+    }
+    return new RawBlock({
+      header: new RawHeader({
+        hash: Buffer.from(block.hash, 'hex'),
+        height: block.height,
+        version: block.header.version,
+        prevHash: Buffer.from(block.prevHash, 'hex'),
+        merkleRoot: block.header.merkleRoot.buffer,
+        bits: block.header.bits,
+        nonce: block.header.nonce,
+        hashStateRoot: block.header.hashStateRoot.buffer,
+        hashUTXORoot: block.header.hashUTXORoot.buffer,
+        prevOutStakeHash: block.header.prevOutStakeHash.buffer,
+        prevOutStakeN: block.header.prevOutStakeN,
+        vchBlockSig: block.header.vchBlockSig.buffer
+      }),
+      transactions
+    })
   }
 
   async _checkTip() {

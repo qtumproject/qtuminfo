@@ -1,5 +1,4 @@
 import mongoose from 'mongoose'
-import {Address} from 'qtuminfo-lib'
 
 const addressSchema = new mongoose.Schema({
   type: {type: String},
@@ -10,9 +9,5 @@ const addressSchema = new mongoose.Schema({
     alias: 'data'
   }
 }, {_id: false})
-
-addressSchema.method('getRawAddress', function() {
-  return new Address({type: this.type, data: this.hex, chain: mongoose.chain})
-})
 
 export default addressSchema
