@@ -23,7 +23,11 @@ const blockSchema = new mongoose.Schema({
   timestamp: Number,
   size: Number,
   weight: Number,
-  transactions: [String],
+  transactions: [{
+    type: String,
+    get: s => Buffer.from(s, 'hex'),
+    set: x => x.toString('hex')
+  }],
   transactionCount: Number,
   miner: {type: addressSchema, index: true},
   coinStakeValue: {

@@ -44,7 +44,7 @@ export default class DbService extends Service {
   }
 
   async updateServiceTip(serviceName, tip) {
-    await Tip.findOneAndUpdate(
+    await Tip.updateOne(
       {service: serviceName},
       {height: tip.height, hash: tip.hash},
       {upsert: true}

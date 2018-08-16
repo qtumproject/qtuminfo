@@ -86,7 +86,7 @@ export default class BlockService extends Service {
       }),
       coinStakeValue: block.coinStakeValue && LongtoBigInt(block.coinStakeValue)
     }
-    let nextBlock = await this.model('Header').findOne({height: block.height + 1}, 'hash', {lean: true})
+    let nextBlock = await this.model('Header').findOne({height: block.height + 1}, '-_id hash', {lean: true})
     result.nextHash = nextBlock && Buffer.from(nextBlock.hash, 'hex')
     return result
   }
@@ -149,13 +149,13 @@ export default class BlockService extends Service {
     this.logger.info('Block Service: retrieved all the headers of lookups')
     let block
     do {
-      block = await Block.findOne({hash: hash.toString('hex')}, 'hash', {lean: true})
+      block = await Block.findOne({hash: hash.toString('hex')}, '-_id hash', {lean: true})
       if (block) {
         hash = Buffer.from(block.hash, 'hex')
       } else {
         this.logger.debug('Block Service: block:', hash.toString('hex'), 'was not found, proceeding to older blocks')
       }
-      let header = await Block.findOne({height: --height}, 'hash')
+      let header = await Block.findOne({height: --height}, '-_id hash')
       assert(header, 'Header not found for reset')
       if (!block) {
         this.logger.debug('Block Service: trying block:', header.hash.toString('hex'))
@@ -166,7 +166,7 @@ export default class BlockService extends Service {
 
   async start() {
     let tip = await this.node.getServiceTip('block')
-    if (tip.height > 0 && !await Block.findOne({hash: tip.hash.toString('hex')}, null, {lean: true})) {
+    if (tip.height > 0 && !await Block.findOne({hash: tip.hash.toString('hex')}, '_id', {lean: true})) {
       tip = null
     }
     this._blockProcessor = new AsyncQueue(this._onBlock.bind(this))
@@ -183,11 +183,13 @@ export default class BlockService extends Service {
   }
 
   async _loadRecentBlockHashes() {
-    let hashes = (await Block.find(
-      {height: {$gte: this._tip.height - this._recentBlockHashesCount, $lte: this._tip.height}},
-      'hash',
-      {lean: true}
-    )).map(block => block.hash)
+    let hashes = await Block.collection
+      .find(
+        {height: {$gte: this._tip.height - this._recentBlockHashesCount, $lte: this._tip.height}},
+        {projection: {_id: false, hash: true}}
+      )
+      .map(document => document.hash)
+      .toArray()
     for (let i = 0; i < hashes.length - 1; ++i) {
       this._recentBlockHashes.set(hashes[i + 1], Buffer.from(hashes[i], 'hex'))
     }
@@ -195,8 +197,8 @@ export default class BlockService extends Service {
   }
 
   async _getTimeSinceLastBlock() {
-    let header = await Block.findOne({height: Math.max(this._tip.height - 1, 0)}, 'timestamp', {lean: true})
-    let tip = await Block.findOne({hash: this._tip.hash.toString('hex')}, 'timestamp', {lean: true})
+    let header = await Block.findOne({height: Math.max(this._tip.height - 1, 0)}, '-_id timestamp', {lean: true})
+    let tip = await Block.findOne({hash: this._tip.hash.toString('hex')}, '-_id timestamp', {lean: true})
     return convertSecondsToHumanReadable(tip.timestamp - header.timestamp)
   }
 
@@ -224,7 +226,7 @@ export default class BlockService extends Service {
 
   async _onReorg(blocks) {
     let targetHeight = blocks[blocks.length - 1].height - 1
-    let targetHash = (await Block.findOne({height: targetHeight}, 'hash')).hash
+    let {hash: targetHash} = await Block.findOne({height: targetHeight}, '-_id hash')
     try {
       for (let service of this.node.getServicesByOrder().reverse()) {
         this.logger.info('Block Service: reorging', service.name, 'service')
@@ -333,10 +335,7 @@ export default class BlockService extends Service {
     let hash = this._tip.hash
     let blocks = []
     for (let i = 0; i < this._recentBlockHashes.length && Buffer.compare(hash, commonHeader.hash) !== 0; ++i) {
-      let block = await Block.findOne(
-        {hash: hash.toString('hex')},
-        'hash height prevHash'
-      )
+      let block = await Block.findOne({hash}, '-_id hash height prevHash')
       blocks.push(block)
       hash = block.prevHash
     }
@@ -380,7 +379,7 @@ export default class BlockService extends Service {
     }
     this._processingBlock = true
     try {
-      if (await Block.findOne({hash: rawBlock.hash.toString('hex')}, 'height', {lean: true})) {
+      if (await Block.findOne({hash: rawBlock.hash}, '_id', {lean: true})) {
         this._processingBlock = false
         this.logger.debug('Block Service: not syncing, block already in database')
       } else {
@@ -456,10 +455,7 @@ export default class BlockService extends Service {
   async __onBlock(rawBlock) {
     let header
     do {
-      header = await Header.findOne(
-        {hash: rawBlock.hash.toString('hex')},
-        'height'
-      )
+      header = await Header.findOne({hash: rawBlock.hash}, '-_id height')
     } while (!header)
     let miner
     let coinStakeValue
@@ -468,7 +464,7 @@ export default class BlockService extends Service {
       let txo = await TransactionOutput.findOne({
         'output.transactionId': kernel.prevTxId.toString('hex'),
         'output.index': kernel.outputIndex
-      }, 'address value')
+      }, '-_id address value')
       miner = {type: Address.PAY_TO_PUBLIC_KEY_HASH, data: txo.address.data}
       coinStakeValue = txo.value
     } else {
@@ -485,7 +481,7 @@ export default class BlockService extends Service {
       timestamp: rawBlock.header.timestamp,
       size: rawBlock.size,
       weight: rawBlock.weight,
-      transactions: rawBlock.transactions.map(transaction => transaction.id.toString('hex')),
+      transactions: rawBlock.transactions.map(transaction => transaction.id),
       transactionCount: rawBlock.transactions.length,
       miner,
       ...coinStakeValue ? {coinStakeValue} : {}

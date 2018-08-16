@@ -256,13 +256,16 @@ export default class TransactionService extends Service {
   }
 
   async onReorg(height) {
-    let outputTransactionIds = (await Transaction.find(
-      {
-        'block.height': {$gt: height},
-        index: {$in: [0, 1]}
-      },
-      'id'
-    )).map(tx => tx.id)
+    let outputTransactionIds = await Transaction.collection
+      .find(
+        {
+          'block.height': {$gt: height},
+          index: {$in: [0, 1]}
+        },
+        {$projection: {_id: false, id: true}}
+      )
+      .map(document => document.id)
+      .toArray()
     await Transaction.bulkWrite([
       {deleteMany: {filter: {id: {$in: outputTransactionIds}}}},
       {

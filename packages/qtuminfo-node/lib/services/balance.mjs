@@ -191,10 +191,15 @@ export default class BalanceService extends Service {
           balance: value
         }
       })
-    let originalBalances = await AddressInfo.collection.find(
-      {address: {$in: balanceChanges.map(item => item.address)}},
-      {sort: {address: 1}}
-    ).toArray()
+    let originalBalances = await AddressInfo.collection
+      .find(
+        {address: {$in: balanceChanges.map(item => item.address)}},
+        {
+          sort: {address: 1},
+          projection: {_id: false, address: true, balance: true}
+        }
+      )
+      .toArray()
     let mergeResult = []
     for (let i = 0, j = 0; i < balanceChanges.length; ++i) {
       if (
@@ -294,15 +299,21 @@ export default class BalanceService extends Service {
       {$sort: {address: 1}}
     ]).allowDiskUse(true)
     if (balanceChanges.length) {
-      let originalBalances = await AddressInfo.collection.find(
-        {address: {$in: balanceChanges.map(item => item.address)}},
-        {sort: {address: 1}}
-      ).toArray()
+      let originalBalances = await AddressInfo.collection
+        .find(
+          {address: {$in: balanceChanges.map(item => item.address)}},
+          {
+            sort: {address: 1},
+            projection: {_id: false, balance: true}
+          }
+        )
+        .map(document => document.balance)
+        .toArray()
       let mergeResult = []
       for (let i = 0; i < balanceChanges.length; ++i) {
         mergeResult.push({
           address: balanceChanges[i].address,
-          balance: BigInttoLong(toBigInt(originalBalances[i].balance) - toBigInt(balanceChanges[i].balance))
+          balance: BigInttoLong(toBigInt(originalBalances[i]) - toBigInt(balanceChanges[i].balance))
         })
       }
       await AddressInfo.collection.bulkWrite(

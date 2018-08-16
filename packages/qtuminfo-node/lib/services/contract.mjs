@@ -38,7 +38,7 @@ export default class ContractService extends Service {
     for (let x of [0x80, 0x81, 0x82, 0x83, 0x84]) {
       let dgpAddress = Buffer.alloc(20)
       dgpAddress[19] = x
-      await Contract.findOneAndUpdate(
+      await Contract.updateOne(
         {address: dgpAddress},
         {createHeight: 0, type: 'dgp', tags: ['dgp']},
         {upsert: true}
@@ -67,7 +67,7 @@ export default class ContractService extends Service {
           let {address: ownerAddress} = await TransactionOutput.findOne({
             'input.transactionId': transaction.id.toString('hex'),
             'input.index': 0
-          }, 'address')
+          }, '-_id address')
           let owner
           if (ownerAddress) {
             owner = new Address({
@@ -100,8 +100,13 @@ export default class ContractService extends Service {
   }
 
   async onReorg(height) {
-    let contracts = (await Contract.find({createHeight: {$gt: height}}, 'address', {lean: true}))
-      .map(contract => contract.address)
+    let contracts = await Contract.collection
+      .find(
+        {createHeight: {$gt: height}},
+        {projection: {_id: false, address: true}}
+      )
+      .map(document => document.address)
+      .toArray()
     await Contract.deleteMany({createHeight: {$gt: height}})
     await QRC20TokenBalance.deleteMany({contract: {$in: contracts}})
     let balanceChanges = new Set()
@@ -140,9 +145,12 @@ export default class ContractService extends Service {
   async _syncContracts() {
     let result = await this._client.listcontracts(1, 1e8)
     let contractsToCreate = new Set(Object.keys(result))
-    let originalContracts = await Contract.find({}, 'address', {lean: true})
+    let originalContracts = await Contract.collection
+      .find({}, {projection: {_id: false, address: true}})
+      .map(document => document.address)
+      .toArray()
     let contractsToRemove = []
-    for (let {address} of originalContracts) {
+    for (let address of originalContracts) {
       if (contractsToCreate.has(address)) {
         contractsToCreate.delete(address)
       } else {
@@ -285,8 +293,8 @@ export default class ContractService extends Service {
     let totalSupplyChanges = new Set()
     for (let index = 0; index < receiptIndices.length; ++index) {
       let tx = block.transactions[receiptIndices[index]]
-      await Transaction.findOneAndUpdate(
-        {id: tx.id.toString('hex')},
+      await Transaction.updateOne(
+        {id: tx.id},
         {
           receipts: blockReceipts[index].map(receipt => ({
             gasUsed: receipt.gasUsed,

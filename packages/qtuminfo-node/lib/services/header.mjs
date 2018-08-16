@@ -303,11 +303,13 @@ export default class HeaderService extends Service {
       throw new Error('Header Service: block service is mis-aligned')
     }
     let startingHeight = tip.height + 1
-    let results = (await Header.find(
-      {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
-      'hash',
-      {lean: true}
-    )).map(header => Buffer.from(header.hash, 'hex'))
+    let results = await Header.collection
+      .find(
+        {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
+        {projection: {_id: false, hash: true}}
+      )
+      .map(document => Buffer.from(document.hash, 'hex'))
+      .toArray()
     let index = numResultsNeeded - 1
     let endHash = index <= 0 || !results[index] ? 0 : results[index]
     return {targetHash: results[0], endHash}
