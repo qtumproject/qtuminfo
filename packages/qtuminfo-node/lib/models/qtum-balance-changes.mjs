@@ -8,7 +8,7 @@ const blockSchema = new mongoose.Schema({
     get: s => Buffer.from(s, 'hex'),
     set: x => x.toString('hex')
   },
-  height: Number,
+  height: {type: Number, index: true},
   timestamp: Number
 }, {_id: false})
 
@@ -33,7 +33,6 @@ const qtumBalanceChangesSchema = new mongoose.Schema({
   }
 })
 
-qtumBalanceChangesSchema.index({'block.height': 1, index: 1})
 qtumBalanceChangesSchema.index({address: 1, 'block.height': 1, index: 1})
 qtumBalanceChangesSchema.index({address: 1, 'block.timestamp': 1})
 

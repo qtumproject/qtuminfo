@@ -3,7 +3,7 @@ import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
 import QtumBalanceChanges from '../models/qtum-balance-changes'
 import Service from './base'
-import {toBigInt} from '../utils'
+import {toBigInt, BigInttoLong, LongtoBigInt} from '../utils'
 
 export default class TransactionService extends Service {
   constructor(options) {
@@ -430,18 +430,25 @@ export default class TransactionService extends Service {
         }
       ])
       for (let item of balanceChanges) {
-        item.id = tx.id
+        item.id = tx.id.toString('hex')
         item.block = {
-          hash: block.hash,
+          hash: block.hash.toString('hex'),
           height: block.height,
+          timestamp: block.timestamp
         }
         item.index = indexInBlock
-        item.value = toBigInt(item.value)
+        item.value = BigInttoLong(toBigInt(item.value))
         if (item.address) {
           relatedAddresses.push(item.address)
         }
       }
-      await QtumBalanceChanges.insertMany(balanceChanges, {ordered: false})
+      await QtumBalanceChanges.collection.insertMany(balanceChanges, {ordered: false})
+      tx.balanceChanges = balanceChanges
+        .filter(item => item.address)
+        .map(({address, value}) => ({
+          address: {type: address.type, hex: address.hex},
+          value: LongtoBigInt(value)
+        }))
     }
 
     await Transaction.create({

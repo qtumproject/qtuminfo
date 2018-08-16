@@ -58,28 +58,33 @@ export default class BalanceService extends Service {
       return
     }
 
-    let balanceChanges = await QtumBalanceChanges.aggregate([
-      {
-        $match: {
-          'block.height': block.height,
-          address: {$ne: null}
+    let balanceMapping = new Map()
+    for (let tx of block.transactions) {
+      for (let {address, value} of tx.balanceChanges) {
+        if (!address) {
+          continue
         }
-      },
-      {
-        $group: {
-          _id: '$address',
-          value: {$sum: '$value'}
+        let balanceKey = `${address.type}/${address.hex}`
+        balanceMapping.set(balanceKey, (balanceMapping.get(balanceKey) || 0n) + value)
+      }
+    }
+    let balanceChanges = [...balanceMapping]
+      .sort((x, y) => {
+        if (x[0] < y[0]) {
+          return -1
+        } else if (x[0] > y[0]) {
+          return 1
+        } else {
+          return 0
         }
-      },
-      {
-        $project: {
-          _id: false,
-          address: '$_id',
-          balance: '$value'
+      })
+      .map(([addressKey, value]) => {
+        let [type, hex] = addressKey.split('/')
+        return {
+          address: {type, hex},
+          balance: value
         }
-      },
-      {$sort: {address: 1}}
-    ])
+      })
     let originalBalances = await AddressInfo.collection.find(
       {address: {$in: balanceChanges.map(item => item.address)}},
       {sort: {address: 1}}
@@ -93,13 +98,13 @@ export default class BalanceService extends Service {
       ) {
         mergeResult.push({
           address: balanceChanges[i].address,
-          balance: BigInttoLong(toBigInt(balanceChanges[i].balance)),
+          balance: BigInttoLong(balanceChanges[i].balance)
         })
       } else {
-        if (toBigInt(balanceChanges[i].balance)) {
+        if (balanceChanges[i].balance) {
           mergeResult.push({
             address: balanceChanges[i].address,
-            balance: BigInttoLong(toBigInt(originalBalances[j].balance) + toBigInt(balanceChanges[i].balance))
+            balance: BigInttoLong(toBigInt(originalBalances[j].balance) + balanceChanges[i].balance)
           })
         }
         ++j
