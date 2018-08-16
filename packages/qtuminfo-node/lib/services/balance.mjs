@@ -168,17 +168,13 @@ export default class BalanceService extends Service {
       return
     }
 
-    let balanceMapping = new Map()
+    let balanceMapping = {}
     for (let tx of block.transactions) {
-      for (let {address, value} of tx.balanceChanges) {
-        if (!address) {
-          continue
-        }
-        let balanceKey = `${address.type}/${address.hex}`
-        balanceMapping.set(balanceKey, (balanceMapping.get(balanceKey) || 0n) + value)
+      for (let {addressKey, value} of tx.balanceChanges) {
+        balanceMapping[addressKey] = (balanceMapping[addressKey] || 0n) + value
       }
     }
-    let balanceChanges = [...balanceMapping]
+    let balanceChanges = [...Object.entries(balanceMapping)]
       .sort((x, y) => {
         if (x[0] < y[0]) {
           return -1
@@ -295,12 +291,12 @@ export default class BalanceService extends Service {
         }
       },
       {$match: {balance: {$ne: 0}}},
-      {$sort: {'address.hex': 1, 'addresss.type': 1}}
+      {$sort: {address: 1}}
     ]).allowDiskUse(true)
     if (balanceChanges.length) {
       let originalBalances = await AddressInfo.collection.find(
         {address: {$in: balanceChanges.map(item => item.address)}},
-        {sort: {'address.hex': 1, 'address.type': 1}}
+        {sort: {address: 1}}
       ).toArray()
       let mergeResult = []
       for (let i = 0; i < balanceChanges.length; ++i) {

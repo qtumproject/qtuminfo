@@ -9,11 +9,12 @@ export default class MempoolService extends Service {
   constructor(options) {
     super(options)
     this.subscriptions = {transaction: []}
+    this._transaction = this.node.services.get('transaction')
     this._enabled = false
   }
 
   static get dependencies() {
-    return ['db', 'p2p']
+    return ['db', 'p2p', 'transaction']
   }
 
   _startSubscriptions() {
@@ -76,42 +77,7 @@ export default class MempoolService extends Service {
     })
     await TransactionOutput.insertMany(outputTxos)
 
-    let balanceChanges = await TransactionOutput.aggregate([
-      {
-        $match: {
-          value: {$ne: 0},
-          $or: [
-            {'input.transactionId': tx.id.toString('hex')},
-            {'output.transactionId': tx.id.toString('hex')},
-          ]
-        }
-      },
-      {
-        $project: {
-          address: '$address',
-          value: {
-            $cond: {
-              if: {$eq: ['$input.transactionId', tx.id.toString('hex')]},
-              then: {$subtract: [0, '$value']},
-              else: '$value'
-            }
-          }
-        }
-      },
-      {
-        $group: {
-          _id: '$address',
-          value: {$sum: '$value'}
-        }
-      },
-      {
-        $project: {
-          _id: false,
-          address: '$_id',
-          value: '$value'
-        }
-      }
-    ])
+    let balanceChanges = await this._transaction.getBalanceChanges(tx.id)
     for (let item of balanceChanges) {
       item.id = tx.id
       item.value = toBigInt(item.value)

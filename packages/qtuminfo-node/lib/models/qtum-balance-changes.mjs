@@ -21,8 +21,7 @@ const qtumBalanceChangesSchema = new mongoose.Schema({
   },
   block: {
     type: blockSchema,
-    default: {height: 0xffffffff},
-    timestamp: Number
+    default: {height: 0xffffffff}
   },
   index: Number,
   address: addressSchema,
@@ -34,6 +33,5 @@ const qtumBalanceChangesSchema = new mongoose.Schema({
 })
 
 qtumBalanceChangesSchema.index({address: 1, 'block.height': 1, index: 1})
-qtumBalanceChangesSchema.index({address: 1, 'block.timestamp': 1})
 
 export default mongoose.model('QtumBalanceChanges', qtumBalanceChangesSchema)

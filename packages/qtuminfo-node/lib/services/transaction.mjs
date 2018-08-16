@@ -308,6 +308,14 @@ export default class TransactionService extends Service {
   async _processTransaction(tx, indexInBlock, block) {
     let resultTransaction = await Transaction.findOne({id: tx.id})
     if (resultTransaction) {
+      await QtumBalanceChanges.updateMany(
+        {id: tx.id},
+        {
+          hash: block.hash,
+          height: block.height,
+          timestamp: block.header.timestamp
+        }
+      )
       await TransactionOutput.bulkWrite([
         {
           updateMany: {
@@ -329,6 +337,13 @@ export default class TransactionService extends Service {
       }
       resultTransaction.index = indexInBlock
       await resultTransaction.save()
+      let balanceChanges = await this.getBalanceChanges(tx.id)
+      tx.balanceChanges = balanceChanges
+        .filter(item => item.address)
+        .map(({address, value}) => ({
+          addressKey: `${address.type}/${address.hex}`,
+          value: toBigInt(value)
+        }))
       return
     }
 
@@ -394,47 +409,13 @@ export default class TransactionService extends Service {
 
     let relatedAddresses = []
     if (block.height > 0) {
-      let balanceChanges = await TransactionOutput.aggregate([
-        {
-          $match: {
-            $or: [
-              {'input.transactionId': tx.id.toString('hex')},
-              {'output.transactionId': tx.id.toString('hex')},
-            ]
-          }
-        },
-        {
-          $project: {
-            address: '$address',
-            value: {
-              $cond: {
-                if: {$eq: ['$input.transactionId', tx.id.toString('hex')]},
-                then: {$subtract: [0, '$value']},
-                else: '$value'
-              }
-            }
-          }
-        },
-        {
-          $group: {
-            _id: '$address',
-            value: {$sum: '$value'}
-          }
-        },
-        {
-          $project: {
-            _id: false,
-            address: '$_id',
-            value: '$value'
-          }
-        }
-      ])
+      let balanceChanges = await this.getBalanceChanges(tx.id)
       for (let item of balanceChanges) {
         item.id = tx.id.toString('hex')
         item.block = {
           hash: block.hash.toString('hex'),
           height: block.height,
-          timestamp: block.timestamp
+          timestamp: block.header.timestamp
         }
         item.index = indexInBlock
         item.value = BigInttoLong(toBigInt(item.value))
@@ -446,7 +427,7 @@ export default class TransactionService extends Service {
       tx.balanceChanges = balanceChanges
         .filter(item => item.address)
         .map(({address, value}) => ({
-          address: {type: address.type, hex: address.hex},
+          addressKey: `${address.type}/${address.hex}`,
           value: LongtoBigInt(value)
         }))
     }
@@ -469,5 +450,44 @@ export default class TransactionService extends Service {
       weight: tx.weight,
       relatedAddresses
     })
+  }
+
+  async getBalanceChanges(id) {
+    id = id.toString('hex')
+    return await TransactionOutput.aggregate([
+      {
+        $match: {
+          $or: [
+            {'input.transactionId': id},
+            {'output.transactionId': id},
+          ]
+        }
+      },
+      {
+        $project: {
+          address: '$address',
+          value: {
+            $cond: {
+              if: {$eq: ['$input.transactionId', id]},
+              then: {$subtract: [0, '$value']},
+              else: '$value'
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$address',
+          value: {$sum: '$value'}
+        }
+      },
+      {
+        $project: {
+          _id: false,
+          address: '$_id',
+          value: '$value'
+        }
+      }
+    ])
   }
 }

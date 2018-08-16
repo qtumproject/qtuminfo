@@ -25,23 +25,6 @@ export default class AddressService extends Service {
     }
   }
 
-  // async start() {
-  //   console.time('QYHV93kbN9osowPHTWHjeYzgrmZasdatov')
-  //   console.log(await this.getAddressSummary(new Address({
-  //     type: 'pubkeyhash',
-  //     data: Buffer.from('8021d6dbb2d121a33f6b180daf398c2c08cb9848', 'hex'),
-  //     chain: this.chain
-  //   })))
-  //   console.timeEnd('QYHV93kbN9osowPHTWHjeYzgrmZasdatov')
-  //   console.time('QZDJya5Szfux2op7qhHUGKsBT4eGiyTPkH')
-  //   console.log(await this.getAddressSummary(new Address({
-  //     type: 'pubkeyhash',
-  //     data: Buffer.from('8a4fd1372b1dd683fede7d68f2332fae2e9c9f71', 'hex'),
-  //     chain: this.chain
-  //   })))
-  //   console.timeEnd('QZDJya5Szfux2op7qhHUGKsBT4eGiyTPkH')
-  // }
-
   async getAddressHistory(addresses, {from = 0, limit = 100, reversed = true} = {}) {
     addresses = parseAddresses(addresses)
     let hexAddresses = toHexAddresses(addresses)
@@ -127,21 +110,31 @@ export default class AddressService extends Service {
       {$sort: sort},
       {$skip: from},
       {$limit: limit},
-      {
-        $group: {
-          _id: '$id',
-          block: {$first: '$block'},
-          amount: {$sum: '$value'}
-        }
-      },
-      {
-        $project: {
-          _id: false,
-          id: '$_id',
-          block: '$block',
-          amount: '$amount'
-        }
-      }
+      ...addresses.length <= 1
+        ? [{
+          $project: {
+            id: '$id',
+            block: '$block',
+            amount: '$value'
+          }
+        }]
+        : [
+          {
+            $group: {
+              _id: '$id',
+              block: {$first: '$block'},
+              amount: {$sum: '$value'}
+            }
+          },
+          {
+            $project: {
+              _id: false,
+              id: '$_id',
+              block: '$block',
+              amount: '$amount'
+            }
+          }
+        ]
     ])
     return {
       totalCount: count,
@@ -149,7 +142,7 @@ export default class AddressService extends Service {
         id: Buffer.from(id, 'hex'),
         block: {
           height: block.height,
-          hash: Buffer.from(block.hash, 'hex'),
+          hash: block.hash && Buffer.from(block.hash, 'hex'),
           timestamp: block.timestamp
         },
         amount: toBigInt(amount)
