@@ -33,7 +33,7 @@ export default class Address {
         data: script.chunks[2].buffer,
         chain
       })
-    case Script.SCRIPT_OUT:
+    case Script.SCRIPTHASH_OUT:
       return new Address({
         type: types.PAY_TO_SCRIPT_HASH,
         data: script.chunks[1].buffer,
