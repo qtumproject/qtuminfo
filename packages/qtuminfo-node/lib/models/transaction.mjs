@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import addressSchema from './address'
 
 const blockSchema = new mongoose.Schema({
   hash: {
@@ -64,9 +65,11 @@ const transactionSchema = new mongoose.Schema({
   },
   index: Number,
   size: Number,
+  relatedAddresses: [addressSchema],
   receipts: [receiptSchema]
 })
 
 transactionSchema.index({'block.height': 1, index: 1})
+transactionSchema.index({relatedAddresses: 1})
 
 export default mongoose.model('Transaction', transactionSchema)

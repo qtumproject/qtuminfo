@@ -308,6 +308,7 @@ export default class TransactionService extends Service {
     })
     await TransactionOutput.insertMany(outputTxos, {ordered: false})
 
+    let relatedAddresses = []
     if (block.height > 0) {
       let balanceChanges = await TransactionOutput.aggregate([
         {
@@ -350,7 +351,11 @@ export default class TransactionService extends Service {
           hash: block.hash,
           height: block.height,
         }
+        item.index = indexInBlock
         item.value = toBigInt(item.value)
+        if (item.address) {
+          relatedAddresses.push(item.address)
+        }
       }
       await QtumBalanceChanges.insertMany(balanceChanges, {ordered: false})
     }
@@ -370,7 +375,8 @@ export default class TransactionService extends Service {
       },
       index: indexInBlock,
       size: tx.size,
-      weight: tx.weight
+      weight: tx.weight,
+      relatedAddresses
     })
   }
 }
