@@ -17,6 +17,116 @@ export default class BalanceService extends Service {
     return ['block', 'db', 'transaction']
   }
 
+  get APIMethods() {
+    return {
+      getBalanceRanking: this.getBalanceRanking.bind(this),
+      getRichList: this.getRichList.bind(this)
+    }
+  }
+
+  async getBalanceRanking(address) {
+    if (address.type === Address.PAY_TO_PUBLIC_KEY) {
+      address = {
+        type: Address.PAY_TO_PUBLIC_KEY_HASH,
+        hex: address.data.toString('hex')
+      }
+    } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
+      address = {
+        type: Address.CONTRACT,
+        hex: address.data.toString('hex')
+      }
+    } else {
+      address = {
+        type: address.type,
+        hex: address.data.toString('hex')
+      }
+    }
+    let balance = await AddressInfo.findOne({address}, '-_id balance', {lean: true})
+    if (balance) {
+      return await AddressInfo.countDocuments({balance: {$gt: balance.balance}}) + 1
+    } else {
+      return await AddressInfo.countDocuments({balance: {$ne: 0}}) + 1
+    }
+  }
+
+  async getRichList({height = null, from = 0, limit = 100} = {}) {
+    if (height === null || height === this._tip.height) {
+      await this._waitUntilProcessed()
+      let result = await AddressInfo.find(
+        {balance: {$ne: 0}},
+        '-_id address balance',
+        {
+          sort: {balance: -1},
+          limit,
+          skip: from
+        }
+      )
+      let count = await AddressInfo.countDocuments({balance: {$ne: 0}})
+      return {
+        totalCount: count,
+        list: result.map(({address, balance}) => ({
+          address: new Address({
+            type: address.type,
+            data: Buffer.from(address.hex, 'hex'),
+            chain: this.chain
+          }),
+          balance
+        }))
+      }
+    } else {
+      let [{count, list}] = await TransactionOutput.aggregate([
+        {
+          $match: {
+            $and: [
+              {address: {$ne: null}},
+              {'address.type': {$ne: Address.CONTRACT}}
+            ],
+            value: {$ne: 0},
+            'output.height': {$gt: 0, $lte: height},
+            $or: [
+              {input: null},
+              {'input.height': {$gt: height}}
+            ]
+          }
+        },
+        {
+          $group: {
+            _id: '$address',
+            balance: {$sum: '$value'}
+          }
+        },
+        {
+          $project: {
+            _id: false,
+            address: '$_id',
+            balance: '$balance'
+          }
+        },
+        {
+          $facet: {
+            count: [{$count: 'count'}],
+            list: [
+              {$sort: {balance: -1}},
+              {$limit: limit},
+              {$skip: from}
+            ]
+          }
+        }
+      ]).allowDiskUse(true)
+      return {
+        totalCount: count.length && count[0].count,
+        list: list.map(({address, balance}) => ({
+          address: new Address({
+            type: address.type,
+            data: Buffer.from(address.hex, 'hex'),
+            chain: this.chain
+          }),
+          balance
+        }))
+      }
+    }
+  }
+
   async start() {
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
