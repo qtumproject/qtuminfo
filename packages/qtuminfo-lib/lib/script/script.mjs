@@ -42,8 +42,6 @@ const inputIdentifiers = {
   CONTRACT_SPEND: 'isContractSpend'
 }
 
-const OP_RETURN_STANDARD_SIZE = 80
-
 export class InvalidScriptError extends Error {
   constructor(...args) {
     super(...args)
@@ -61,6 +59,13 @@ export default class Script {
   }
 
   static fromBuffer(buffer) {
+    if (buffer[0] === Opcode.OP_RETURN) {
+      let data = buffer.slice(1)
+      return new Script([
+        {code: Opcode.OP_RETURN},
+        ...data.length ? [{buffer: data}] : []
+      ])
+    }
     let reader = new BufferReader(buffer)
     let chunks = []
     while (!reader.finished) {
@@ -95,6 +100,13 @@ export default class Script {
   }
 
   toBufferWriter(writer) {
+    if (this.isDataOut()) {
+      writer.writeUInt8(Opcode.OP_RETURN)
+      if (this.chunks.length === 2) {
+        writer.write(this.chunks[1].buffer)
+      }
+      return
+    }
     for (let {code, buffer} of this.chunks) {
       writer.writeUInt8(code)
       if (buffer) {
@@ -206,7 +218,7 @@ export default class Script {
     return this.chunks.length >= 1 && this.chunks[0].code === Opcode.OP_RETURN
       && (
         this.chunks.length === 1
-        || this.chunks.length === 2 && this.chunks[1].buffer && this.chunks[1].buffer.length <= OP_RETURN_STANDARD_SIZE
+        || this.chunks.length === 2 && this.chunks[1].buffer
       )
   }
 
@@ -241,8 +253,14 @@ export default class Script {
     if (this._type) {
       return this._type
     }
-    let outputType = this._classifyOutput()
-    this._type = outputType === types.UNKNOWN ? this._classifyInput() : outputType
+    if (this._isOutput) {
+      return this._classifyOutput()
+    } else if (this._isInput) {
+      return this._classifyOutput()
+    } else {
+      let outputType = this._classifyOutput()
+      this._type = outputType === types.UNKNOWN ? this._classifyInput() : outputType
+    }
     return this._type
   }
 
