@@ -39,12 +39,7 @@ export default class QtumNode {
       if (err.code !== 'MODULE_NOT_FOUND') {
         throw err
       }
-      let servicePackage = (await import(`node_modules/${service.name}/package.json`)).default
-      let serviceModule = service.name
-      if (servicePackage.qtuminfoService) {
-        serviceModule += `/${servicePackage.qtuminfoService}`
-      }
-      return (await import(serviceModule)).default
+      return (await import(path.resolve(process.cwd(), `node_modules/${service.name}`))).default
     }
   }
 
