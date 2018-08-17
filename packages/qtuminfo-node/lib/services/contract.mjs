@@ -4,8 +4,10 @@ import {Address, Solidity} from 'qtuminfo-lib'
 import Contract from '../models/contract'
 import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
+import QtumBalanceChanges from '../models/qtum-balance-changes'
 import QRC20TokenBalance from '../models/qrc20-token-balance'
 import Service from './base'
+import {toBigInt} from '../utils'
 
 const totalSupplyABI = Solidity.qrc20ABIs.find(abi => abi.name === 'totalSupply')
 const balanceOfABI = Solidity.qrc20ABIs.find(abi => abi.name === 'balanceOf')
@@ -22,6 +24,559 @@ export default class ContractService extends Service {
 
   static get dependencies() {
     return ['block', 'db', 'transaction']
+  }
+
+  get APIMethods() {
+    return {
+      getContract: this.getContract.bind(this),
+      getContractHistory: this.getContractHistory.bind(this),
+      getContractSummary: this.getContractSummary.bind(this),
+      getQRC20TokenTransfers: this.getQRC20TokenTransfers.bind(this),
+      getQRC721TokenTransfers: this.getQRC721TokenTransfers.bind(this),
+      getAddressQRC20TokenBalanceHistory: this.getAddressQRC20TokenBalanceHistory.bind(this),
+      listQRC20Tokens: this.listQRC20Tokens.bind(this),
+      getAllQRC20TokenBalances: this.getAllQRC20TokenBalances.bind(this),
+      searchQRC20Token: this.searchQRC20Token.bind(this)
+    }
+  }
+
+  async getContract(address) {
+    return await Contract.findOne({address}, '-_id')
+  }
+
+  async getContractHistory(address, {from = 0, limit = 100, reversed = true} = {}) {
+    address = address.data.toString('hex')
+    let sort = reversed ? {'block.height': -1, index: -1} : {'block.height': 1, index: 1}
+    let [{count, list}] = await Transaction.aggregate([
+      {
+        $match: {
+          $or: [
+            {relatedAddresses: {type: Address.CONTRACT, hex: address}},
+            {'receipts.contractAddress': address},
+            {
+              'receipts.logs': {
+                $elemMatch: {
+                  $or: [
+                    {address},
+                    {
+                      $and: [
+                        {topics: TransferABI.id.toString('hex')},
+                        {topics: '0'.repeat(24) + address},
+                        {'topics.0': TransferABI.id.toString('hex')},
+                        {
+                          $or: [
+                            {'topics.1': '0'.repeat(24) + address},
+                            {'topics.2': '0'.repeat(24) + address}
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        $facet: {
+          count: [{$count: 'count'}],
+          list: [
+            {$sort: sort},
+            {$skip: from},
+            {$limit: limit},
+            {
+              $project: {
+                _id: false,
+                id: true
+              }
+            }
+          ]
+        }
+      }
+    ])
+    return {
+      totalCount: count[0].count,
+      transactions: list.map(tx => Buffer.from(tx.id, 'hex'))
+    }
+  }
+
+  async getContractSummary(address) {
+    address = address.data.toString('hex')
+    let totalCount = await Transaction.countDocuments({
+      $or: [
+        {relatedAddresses: {type: Address.CONTRACT, hex: address}},
+        {'receipts.contractAddress': address},
+        {
+          'receipts.logs': {
+            $elemMatch: {
+              $or: [
+                {address},
+                {
+                  $and: [
+                    {topics: TransferABI.id.toString('hex')},
+                    {topics: '0'.repeat(24) + address},
+                    {'topics.0': TransferABI.id.toString('hex')},
+                    {
+                      $or: [
+                        {'topics.1': '0'.repeat(24) + address},
+                        {'topics.2': '0'.repeat(24) + address}
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    })
+    if (totalCount === 0) {
+      return {
+        balance: 0n,
+        totalReceived: 0n,
+        totalSent: 0n,
+        totalCount: 0
+      }
+    }
+
+    let [balanceChangesResult] = await QtumBalanceChanges.aggregate([
+      {
+        $match: {
+          address: {type: Address.CONTRACT, hex: address},
+          value: {$ne: 0}
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalReceived: {
+            $sum: {
+              $cond: {
+                if: {$gt: ['$value', 0]},
+                then: '$value',
+                else: 0
+              }
+            }
+          },
+          totalSent: {
+            $sum: {
+              $cond: {
+                if: {$lt: ['$value', 0]},
+                then: {$abs: '$value'},
+                else: 0
+              }
+            }
+          }
+        }
+      }
+    ])
+    if (balanceChangesResult) {
+      let totalReceived = toBigInt(balanceChangesResult.totalReceived)
+      let totalSent = toBigInt(balanceChangesResult.totalSent)
+      return {
+        balance: totalReceived - totalSent,
+        totalReceived,
+        totalSent,
+        totalCount
+      }
+    } else {
+      return {
+        balance: 0n,
+        totalReceived: 0n,
+        totalSent: 0n,
+        totalCount
+      }
+    }
+  }
+
+  async getQRC20TokenTransfers(transaction) {
+    let list = []
+    for (let receipt of transaction.receipts) {
+      for (let {address, topics, data} of receipt.logs) {
+        if (Buffer.compare(topics[0], TransferABI.id) !== 0 || topics.length !== 3 || data.length !== 32) {
+          continue
+        }
+        let token = await Contract.findOne({address, type: 'qrc20'})
+        if (!token) {
+          continue
+        }
+        list.push({
+          token: {address, ...parseQRC20(token.qrc20)},
+          from: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[1].slice(12)),
+          to: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[2].slice(12)),
+          amount: BigInt(`0x${data.toString('hex')}`)
+        })
+      }
+    }
+    return list
+  }
+
+  async getQRC721TokenTransfers(transaction) {
+    let list = []
+    for (let receipt of transaction.receipts) {
+      for (let {address, topics} of receipt.logs) {
+        if (Buffer.compare(topics[0], TransferABI.id) !== 0 || topics.length !== 4) {
+          continue
+        }
+        let token = await Contract.findOne({address, type: 'qrc721'})
+        if (!token) {
+          continue
+        }
+        list.push({
+          token: {address, ...parseQRC721(token.qrc721)},
+          from: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[1].slice(12)),
+          to: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[2].slice(12)),
+          tokenId: topics[3]
+        })
+      }
+    }
+    return list
+  }
+
+  async getAddressQRC20TokenBalanceHistory(addresses, tokens, {from = 0, limit = 100, reversed = true} = {}) {
+    if (!Array.isArray(addresses)) {
+      addresses = [addresses]
+    }
+    let hexAddresses = addresses
+      .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.CONTRACT].includes(address.type))
+      .map(address => '0'.repeat(24) + address.data.toString('hex'))
+    addresses = addresses.map(address => address.data.toString('hex'))
+    if (tokens !== 'all') {
+      tokens = tokens.map(token => token.toString('hex'))
+    }
+    let sort = reversed ? {'block.height': -1, index: -1} : {'block.height': 1, index: 1}
+
+    let [{count, list}] = await Transaction.aggregate([
+      {
+        $match: {
+          'receipts.logs': {
+            $elemMatch: {
+              ...tokens === 'all' ? {} : {address: {$in: tokens}},
+              $and: [
+                {topics: TransferABI.id.toString('hex')},
+                {topics: {$size: 3}},
+                {topics: {$in: hexAddresses}},
+                {'topics.0': TransferABI.id.toString('hex')},
+                {
+                  $or: [
+                    {'topics.1': {$in: hexAddresses}},
+                    {'topics.2': {$in: hexAddresses}}
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        $facet: {
+          count: [{$count: 'count'}],
+          list: [
+            {$sort: sort},
+            {$skip: from},
+            {$limit: limit},
+            {$unwind: '$receipts'},
+            {$unwind: '$receipts.logs'},
+            {
+              $project: {
+                _id: false,
+                id: '$id',
+                block: '$block',
+                log: '$receipts.logs'
+              }
+            },
+            {
+              $match: {
+                ...tokens === 'all' ? {} : {'log.address': {$in: tokens}},
+                $and: [
+                  {'log.topics': TransferABI.id.toString('hex')},
+                  {'log.topics': {$size: 3}},
+                  {'log.topics': {$in: hexAddresses}},
+                  {'log.topics.0': TransferABI.id.toString('hex')},
+                  {
+                    $or: [
+                      {'log.topics.1': {$in: hexAddresses}},
+                      {'log.topics.2': {$in: hexAddresses}}
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              $lookup: {
+                from: 'contracts',
+                localField: 'log.address',
+                foreignField: 'address',
+                as: 'token'
+              }
+            },
+            {$match: {'token.type': 'qrc20'}},
+            {$unwind: '$token'},
+            {
+              $group: {
+                _id: '$id',
+                block: {$first: '$block'},
+                index: {$first: '$index'},
+                logs: {
+                  $push: {
+                    token: {
+                      address: '$token.address',
+                      name: '$token.qrc20.name',
+                      symbol: '$token.qrc20.symbol',
+                      decimals: '$token.qrc20.decimals',
+                      totalSupply: '$token.qrc20.totalSupply',
+                      version: '$token.qrc20.version'
+                    },
+                    topics: '$log.topics',
+                    data: '$log.data'
+                  }
+                }
+              }
+            },
+            {$sort: sort},
+            {
+              $project: {
+                _id: false,
+                id: '$_id',
+                block: '$block',
+                logs: '$logs'
+              }
+            }
+          ]
+        }
+      }
+    ])
+
+    return {
+      totalCount: count.length && count[0].count,
+      transactions: list.map(({id, block, logs}) => {
+        let tokens = {}
+        for (let {token, topics, data} of logs) {
+          let delta = 0n
+          if (hexAddresses.includes(topics[1])) {
+            delta -= BigInt(`0x${data.toString('hex')}`)
+          }
+          if (hexAddresses.includes(topics[2])) {
+            delta += BigInt(`0x${data.toString('hex')}`)
+          }
+          if (token.address in tokens) {
+            tokens[token.address].amount += delta
+          } else {
+            tokens[token.address] = {token, amount: delta}
+          }
+        }
+        return {
+          id: Buffer.from(id, 'hex'),
+          block: {
+            hash: Buffer.from(block.hash, 'hex'),
+            height: block.height,
+            timestamp: block.timestamp
+          },
+          data: [...Object.values(tokens)].map(({token, amount}) => ({
+            token: {
+              address: Buffer.from(token.address, 'hex'),
+              ...parseQRC20(token.qrc20)
+            },
+            amount
+          }))
+        }
+      })
+    }
+  }
+
+  async listQRC20Tokens({from = 0, limit = 100}) {
+    let [{count, list}] = await QRC20TokenBalance.aggregate([
+      {
+        $match: {
+          address: {$ne: '0'.repeat(40)},
+          balance: {$ne: '0'.repeat(64)}
+        }
+      },
+      {
+        $group: {
+          _id: '$contract',
+          holders: {$sum: 1}
+        }
+      },
+      {$match: {holders: {$ne: 0}}},
+      {
+        $facet: {
+          count: [{$count: 'count'}],
+          list: [
+            {
+              $project: {
+                _id: false,
+                contract: '$_id',
+                holders: '$holders'
+              }
+            },
+            {$sort: {holders: -1}},
+            {$skip: from},
+            {$limit: limit},
+            {
+              $lookup: {
+                from: 'contracts',
+                localField: 'contract',
+                foreignField: 'address',
+                as: 'contract'
+              }
+            },
+            {
+              $project: {
+                address: {$arrayElemAt: ['$contract.address', 0]},
+                qrc20: {$arrayElemAt: ['$contract.qrc20', 0]},
+                holders: '$holders'
+              }
+            }
+          ]
+        }
+      }
+    ])
+    return {
+      totalCount: count.length && count[0].count,
+      tokens: list.map(({address, qrc20, holders}) => ({
+        address: Buffer.from(address, 'hex'),
+        ...parseQRC20(qrc20),
+        holders
+      }))
+    }
+  }
+
+  async getAllQRC20TokenBalances(addresses) {
+    if (!Array.isArray(addresses)) {
+      addresses = [addresses]
+    }
+    let hexAddresses = addresses
+      .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.CONTRACT].includes(address.type))
+      .map(address => '0'.repeat(24) + address.data.toString('hex'))
+    let list = await QRC20TokenBalance.aggregate([
+      {$match: {address: {$in: hexAddresses}}},
+      {
+        $group: {
+          _id: '$contract',
+          balances: {$push: '$balance'}
+        }
+      },
+      {
+        $project: {
+          _id: false,
+          contract: '$_id',
+          balances: '$balances'
+        }
+      },
+      {
+        $lookup: {
+          from: 'contracts',
+          localField: '_id',
+          foreignField: 'address',
+          as: 'contract'
+        }
+      },
+      {$unwind: '$contract'},
+      {
+        $project: {
+          address: {$arrayElemAt: ['$contract.address', 0]},
+          qrc20: {$arrayElemAt: ['$contract.qrc20', 0]},
+          balances: '$balances'
+        }
+      }
+    ])
+    return list.map(({address, qrc20, balances}) => {
+      let sum = 0n
+      for (let balance of balances) {
+        sum += BigInt(`0x${balance}`)
+      }
+      return {
+        address: Buffer.from(address, 'hex'),
+        ...parseQRC20(qrc20),
+        balance: sum
+      }
+    })
+  }
+
+  async searchQRC20Token(name, {limit = 1} = {}) {
+    let regex = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+    let result = await Contract.aggregate([
+      {
+        $match: {
+          $or: [
+            {'qrc20.name': regex},
+            {'qrc20.symbol': regex}
+          ]
+        }
+      },
+      {
+        $project: {
+          address: '$address',
+          qrc20: '$qrc20'
+        }
+      },
+      {
+        $lookup: {
+          from: 'qrc20tokenbalances',
+          localField: 'address',
+          foreignField: 'contract',
+          as: 'balance'
+        }
+      },
+      {$unwind: '$balance'},
+      {
+        $match: {
+          'balance.address': {$ne: '0'.repeat(40)},
+          'balance.balance': {$ne: '0'.repeat(64)}
+        }
+      },
+      {
+        $group: {
+          _id: '$address',
+          qrc20: {$first: '$qrc20'},
+          holders: {$sum: 1}
+        }
+      },
+      {$sort: {holders: -1}},
+      {$limit: limit},
+      {
+        $project: {
+          _id: false,
+          address: '$_id',
+          qrc20: '$qrc20',
+          holders: '$holders'
+        }
+      }
+    ])
+    return result.map(({address, qrc20, holders}) => ({
+      address: Buffer.from(address, 'hex'),
+      ...parseQRC20(qrc20),
+      holders
+    }))
+  }
+
+  async getQRC20TokenRichList(token, {from = 0, limit = 100} = {}) {
+    token = token.toString('hex')
+    let totalCount = await QRC20TokenBalance.countDocuments({
+      contract: token,
+      balance: {$ne: '0'.repeat(64)}
+    })
+    let list = await QRC20TokenBalance.collection
+      .find(
+        {contract: token, balance: {$ne: '0'.repeat(64)}},
+        {
+          sort: {balance: -1},
+          skip: from,
+          limit,
+          projection: {_id: false, address: true, balance: true}
+        }
+      )
+      .map(({address, balance}) => ({
+        address: new Address({
+          type: Address.PAY_TO_PUBLIC_KEY_HASH,
+          data: Buffer.from(address, 'hex'),
+          chain: this.chain
+        }),
+        balance: BigInt(`0x${balance}`)
+      }))
+    return {totalCount, list}
   }
 
   async start() {
@@ -372,8 +927,15 @@ export default class ContractService extends Service {
       await QRC20TokenBalance.collection.bulkWrite(operations)
     }
   }
-}
 
+  async _fromHexAddress(data) {
+    if (await Contract.findOne({address: data}, '_id', {lean: true})) {
+      return new Address({type: Address.CONTRACT, data, chain: this.chain})
+    } else {
+      return new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data, chain: this.chain})
+    }
+  }
+}
 
 function isQRC20(code) {
   return code.includes(balanceOfABI.id)
@@ -385,4 +947,22 @@ function isQRC721(code) {
   return code.includes(balanceOfABI.id)
     && code.includes(ownerOfABI.id)
     && code.includes(TransferABI.id)
+}
+
+function parseQRC20(token) {
+  return {
+    name: token.name,
+    symbol: token.symbol,
+    decimals: token.decimals,
+    totalSupply: 'totalSupply' in token.totalSupply ? BigInt(`0x${token.totalSupply}`) : null,
+    version: token.version
+  }
+}
+
+function parseQRC721(token) {
+  return {
+    name: token.name,
+    symbol: token.symbol,
+    totalSupply: 'totalSupply' in token.totalSupply ? BigInt(`0x${token.totalSupply}`) : null
+  }
 }

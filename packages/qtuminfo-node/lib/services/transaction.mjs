@@ -235,6 +235,153 @@ export default class TransactionService extends Service {
     })
   }
 
+  async searchLogs({
+    fromBlock, toBlock,
+    contractAddresses,
+    addresses, topics,
+    from = 0, limit = 100, reversed = false
+  }) {
+    let elemFilter = {}
+    let filter = {}
+    let logsFilter = {}
+    if (fromBlock != null || toBlock != null) {
+      elemFilter['block.height'] = {}
+      if (fromBlock != null) {
+        elemFilter['block.height'].$gte = fromBlock
+      }
+      if (toBlock != null) {
+        elemFilter['block.height'].$lte = toBlock
+      }
+    }
+    if (contractAddresses || addresses || topics) {
+      elemFilter.receipts = {$elemMatch: {excepted: 'None'}}
+      let nestedFilter = elemFilter.receipts.$elemMatch
+      if (Array.isArray(contractAddresses)) {
+        contractAddresses = contractAddresses.map(address => address.toString('hex'))
+        nestedFilter.contractAddresses = {$in: contractAddresses}
+        filter['receipts.contractAddress'] = {$in: contractAddresses}
+      } else if (contractAddresses) {
+        contractAddresses = contractAddresses.toString('hex')
+        nestedFilter.contractAddresses = contractAddresses
+        filter['receipts.contractAddress'] = contractAddresses
+      }
+      if (addresses || topics) {
+        nestedFilter.logs = {$elemMatch: {}}
+        if (Array.isArray(addresses)) {
+          addresses = addresses.map(address => address.toString('hex'))
+          nestedFilter.logs.$elemMatch.addresses = {$in: addresses}
+          filter['receipts.logs.address'] = {$in: addresses}
+          logsFilter['$$log.address'] = {$in: addresses}
+        } else if (addresses) {
+          addresses = addresses.toString('hex')
+          nestedFilter.logs.$elemMatch.addresses = addresses
+          filter['receipts.logs.address'] = addresses
+          logsFilter['$$log.address'] = addresses
+        }
+        if (topics) {
+          if (!Array.isArray(topics)) {
+            topics = [topics]
+          }
+          let topicElementFilter = {}
+          let topicFilter = {}
+          if (topics.length === 1) {
+            topics = topics[0]
+            if (Array.isArray(topics)) {
+              topics = topics.map(topic => topic.toString('hex'))
+              topicElementFilter.$and = topics.map(topic => ({topics: topic}))
+              topicFilter.$and = topics.map(topic => ({'receipts.logs.topics': topic}))
+              logsFilter.$and = topics.map(topic => ({'$$log.topics': topic}))
+            } else {
+              topics = topics.toString('hex')
+              topicElementFilter.topics = topics
+              topicFilter.topics = topics
+              logsFilter['$$log.topics'] = topics
+            }
+          } else {
+            topicElementFilter.$or = topics.map(topics => {
+              if (Array.isArray(topics)) {
+                return {$and: topics.map(topic => ({topics: topic.toString('hex')}))}
+              } else {
+                return {topics: topics.toString('hex')}
+              }
+            })
+            topicFilter.$or = topics.map(topics => {
+              if (Array.isArray(topics)) {
+                return {$and: topics.map(topic => ({'receipts.logs.topics': topic.toString('hex')}))}
+              } else {
+                return {'receipts.logs.topics': topics.toString('hex')}
+              }
+            })
+            logsFilter.$or = topics.map(topics => {
+              if (Array.isArray(topics)) {
+                return {$and: topics.map(topic => ({'$$log.topics': topic.toString('hex')}))}
+              } else {
+                return {'$$log.topics': topics.toString('hex')}
+              }
+            })
+          }
+          Object.assign(nestedFilter.logs.$elemMatch, topicElementFilter)
+          Object.assign(filter, topicFilter)
+        }
+      } else {
+        nestedFilter.logs = {$ne: []}
+      }
+    }
+
+    let result = await Transaction.aggregate([
+      {$match: elemFilter},
+      {
+        $project: {
+          _id: false,
+          id: '$id',
+          block: {
+            hash: '$block.hash',
+            height: '$block.height'
+          },
+          index: '$index',
+          receipts: '$receipts'
+        }
+      },
+      {$unwind: {path: '$receipts', includeArrayIndex: 'receiptIndex'}},
+      {$match: filter},
+      {
+        $sort: reversed
+          ? {'block.height': -1, index: -1, receiptIndex: -1}
+          : {'block.height': 1, index: 1, receiptIndex: 1}
+      },
+      {$skip: from},
+      {$limit: limit},
+      {
+        $project: {
+          id: '$id',
+          block: '$block',
+          contractAddress: '$receipt.contractAddress',
+          logs: {
+            $filter: {
+              input: '$receipts.logs',
+              as: 'log',
+              cond: logsFilter
+            }
+          }
+        }
+      }
+    ])
+
+    return result.map(({id, block, contractAddress, logs}) => ({
+      id: Buffer.from(id, 'hex'),
+      block: {
+        height: block.height,
+        hash: Buffer.from(block.hash, 'hex')
+      },
+      contractAddress: Buffer.from(contractAddress, 'hex'),
+      logs: logs.map(({address, topics, data}) => ({
+        address: Buffer.from(address, 'hex'),
+        topics: topics.map(topic => Buffer.from(topic, 'hex')),
+        data: data.buffer
+      }))
+    }))
+  }
+
   async start() {
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
