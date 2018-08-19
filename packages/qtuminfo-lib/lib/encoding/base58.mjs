@@ -44,7 +44,7 @@ export class Base58 {
     let n = 0n
     for (let s of string) {
       if (!(s in ALPHABET_MAP)) {
-        throw InvalidBase58Error(string)
+        throw new InvalidBase58Error(string)
       }
       n = n * 58n + BigInt(ALPHABET_MAP[s])
     }

@@ -1,5 +1,10 @@
 import util from 'util'
-import {Hash, Base58Check, SegwitAddress, Script} from '.'
+import {
+  Hash,
+  Base58Check, InvalidBase58Error, InvalidBase58ChecksumError,
+  SegwitAddress, InvalidSegwitAddressError,
+  Script
+} from '.'
 
 const types = {
   PAY_TO_PUBLIC_KEY: 'pubkey',
@@ -66,6 +71,60 @@ export default class Address {
         data: script.chunks[4].buffer,
         chain
       })
+    }
+  }
+
+  static fromString(string, chain) {
+    if (/^[0-9a-f]{40}$/.test(string)) {
+      return new Address({
+        type: types.CONTRACT,
+        data: Buffer.from(string, 'hex'),
+        chain
+      })
+    }
+    try {
+      let result = Base58Check.decode(string)
+      if (result.length === 21) {
+        if (result[0] === chain.pubkeyhash) {
+          return new Address({
+            type: types.PAY_TO_PUBLIC_KEY_HASH,
+            data: result.slice(1),
+            chain
+          })
+        } else if (result[0] === chain.scripthash) {
+          return new Address({
+            type: types.PAY_TO_SCRIPT_HASH,
+            data: result.slice(1),
+            chain
+          })
+        }
+      }
+    } catch (err) {
+      if (!(err instanceof InvalidBase58Error || err instanceof InvalidBase58ChecksumError)) {
+        throw err
+      }
+    }
+    try {
+      let {hrp, version, program} = SegwitAddress.decode(string)
+      if (hrp === chain.witnesshrp && version === 0) {
+        if (program.length === 20) {
+          return new Address({
+            type: types.PAY_TO_WITNESS_KEY_HASH,
+            data: program,
+            chain
+          })
+        } else if (program.length === 32) {
+          return new Address({
+            type: types.PAY_TO_WITNESS_SCRIPT_HASH,
+            data: program,
+            chain
+          })
+        }
+      }
+    } catch (err) {
+      if (!(err instanceof InvalidSegwitAddressError)) {
+        throw err
+      }
     }
   }
 
