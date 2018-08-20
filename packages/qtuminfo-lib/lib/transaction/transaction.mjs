@@ -125,13 +125,13 @@ export default class Transaction {
     return `<Transaction ${this.id.toString('hex')}>`
   }
 
-  isCoinBase() {
+  isCoinbase() {
     return this.inputs.length === 1
       && Buffer.compare(this.inputs[0].prevTxId, Buffer.alloc(32)) === 0
       && this.outputs.length > 0
   }
 
-  isCoinStake() {
+  isCoinstake() {
     return this.inputs.length > 0 && Buffer.compare(this.inputs[0].prevTxId, Buffer.alloc(32)) !== 0
       && this.outputs.length >= 2 && this.outputs[0].isEmpty()
   }
