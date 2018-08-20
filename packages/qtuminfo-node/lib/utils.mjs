@@ -45,13 +45,13 @@ export function BigInttoBuffer32(n) {
     result.push(Number(n & 0xffn))
     n >>= 8n
   }
-  return Buffer.from(result)
+  return Buffer.from(result.reverse())
 }
 
 export function Buffer32toBigInt(buffer) {
   let result = 0n
   for (let i = 0; i < 32; ++i) {
-    result |= BigInt(buffer[i]) << BigInt(i)
+    result |= BigInt(buffer[31 - i]) << BigInt(i << 8)
   }
   return result
 }
