@@ -7,6 +7,7 @@ import bodyparser from 'koa-bodyparser'
 import Service from 'qtuminfo-node/lib/services/base'
 import RateLimiter from './components/rate-limiter'
 import BlocksController from './controllers/blocks'
+import TransactionsController from './controllers/transactions'
 
 export default class QtuminfoAPIService extends Service {
   constructor(options) {
@@ -15,6 +16,7 @@ export default class QtuminfoAPIService extends Service {
     this.disableRateLimiter = options.disableRateLimiter
     this._routePrefix = options.routePrefix || this.name
     this.blocks = new BlocksController(this.node)
+    this.transactions = new TransactionsController(this.node)
   }
 
   static get dependencies() {
@@ -68,6 +70,18 @@ export default class QtuminfoAPIService extends Service {
     router.get('/block/:block', this.blocks.block.bind(this.blocks))
     router.get('/raw-block/:hash', this.blocks.rawBlock.bind(this.blocks))
     router.get('/recent-blocks', this.blocks.recentBlocks.bind(this.blocks))
+
+    router.get(
+      '/tx/:id',
+      this.transactions.transaction.bind(this.transactions),
+      this.transactions.show.bind(this.transactions)
+    )
+    router.get(
+      '/txs/:ids',
+      this.transactions.transactions.bind(this.transactions),
+      this.transactions.show.bind(this.transactions)
+    )
+    router.get('/raw-tx/:id', this.transactions.rawTransaction.bind(this.transactions))
 
     app.use(router.routes()).use(router.allowedMethods())
   }
