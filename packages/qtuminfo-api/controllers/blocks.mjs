@@ -7,7 +7,7 @@ export default class BlocksController {
     let block = ctx.params.block
     if (/^(0|[1-9]\d{0,9})$/.test(block)) {
       block = Number(block)
-    } else if (/^[0-9a-f]{64}$/i.test(block)) {
+    } else if (/^[0-9a-f]{64}$/.test(block)) {
       block = Buffer.from(block, 'hex')
     } else {
       ctx.throw(404)
@@ -52,7 +52,7 @@ export default class BlocksController {
 
   async rawBlock(ctx) {
     let hash = ctx.params.hash
-    if (/^[0-9a-f]{64}$/i.test(hash)) {
+    if (/^[0-9a-f]{64}$/.test(hash)) {
       let block = await this.node.getRawBlock(Buffer.from(hash, 'hex'))
       if (block) {
         ctx.body = block.toBuffer().toString('hex')
