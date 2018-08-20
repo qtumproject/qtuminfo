@@ -304,7 +304,7 @@ export default class AddressService extends Service {
       txid: utxo.output.transactionId,
       vout: utxo.output.index,
       scriptPubKey: utxo.output.scriptPubKey,
-      address: Address.fromScript(Script.fromBuffer(utxo.output.scriptPubKey)),
+      address: Address.fromScript(Script.fromBuffer(utxo.output.scriptPubKey, this.chain)),
       value: utxo.value,
       isStake: utxo.isStake,
       height: utxo.output.height,

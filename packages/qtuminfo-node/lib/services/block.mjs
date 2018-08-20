@@ -567,7 +567,7 @@ export default class BlockService extends Service {
       miner = {type: Address.PAY_TO_PUBLIC_KEY_HASH, data: txo.address.data}
       coinStakeValue = txo.value
     } else {
-      let address = Address.fromScript(rawBlock.transactions[0].outputs[0].scriptPubKey)
+      let address = Address.fromScript(rawBlock.transactions[0].outputs[0].scriptPubKey, this.chain)
       if (address.type === Address.PAY_TO_PUBLIC_KEY) {
         address.type = Address.PAY_TO_PUBLIC_KEY_HASH
       }

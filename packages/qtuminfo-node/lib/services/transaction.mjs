@@ -124,12 +124,12 @@ export default class TransactionService extends Service {
         }
         return result
       }),
-      outputs: transaction.outputs.map(output => {
+      outputs: transaction.outputs.map((output, index) => {
         let result = new Output({
           value: toBigInt(output.value),
           scriptPubKey: Script.fromBuffer(output.scriptPubKey.buffer)
         })
-        result.address = Address.fromScript(result.scriptPubKey)
+        result.address = Address.fromScript(result.scriptPubKey, this.chain, transaction.id, index)
         return result
       }),
       witnesses: transaction.witnesses.map(witness => witness.map(item => item.buffer)),
