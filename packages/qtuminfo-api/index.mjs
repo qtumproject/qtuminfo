@@ -6,6 +6,7 @@ import compress from 'koa-compress'
 import bodyparser from 'koa-bodyparser'
 import Service from 'qtuminfo-node/lib/services/base'
 import RateLimiter from './components/rate-limiter'
+import BlocksController from './controllers/blocks'
 
 export default class QtuminfoAPIService extends Service {
   constructor(options) {
@@ -13,6 +14,7 @@ export default class QtuminfoAPIService extends Service {
     this.rateLimiterOptions = options.rateLimiterOptions
     this.disableRateLimiter = options.disableRateLimiter
     this._routePrefix = options.routePrefix || this.name
+    this.blocks = new BlocksController(this.node)
   }
 
   static get dependencies() {
@@ -61,6 +63,11 @@ export default class QtuminfoAPIService extends Service {
     })
 
     let router = new Router()
+
+    router.get('/blocks', this.blocks.list.bind(this.blocks))
+    router.get('/block/:block', this.blocks.block.bind(this.blocks))
+    router.get('/raw-block/:hash', this.blocks.rawBlock.bind(this.blocks))
+    router.get('/recent-blocks', this.blocks.recentBlocks.bind(this.blocks))
 
     app.use(router.routes()).use(router.allowedMethods())
   }
