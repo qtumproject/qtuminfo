@@ -5,7 +5,7 @@ import Header from '../models/header'
 import Block from '../models/block'
 import TransactionOutput from '../models/transaction-output'
 import Service from './base'
-import {AsyncQueue, Buffer32toBigInt, LongtoBigInt} from '../utils'
+import {AsyncQueue, Buffer32toBigInt, toBigInt} from '../utils'
 
 export default class BlockService extends Service {
   constructor(options) {
@@ -48,7 +48,7 @@ export default class BlockService extends Service {
 
   async getBlock(arg) {
     let filter = Number.isInteger(arg) ? {height: arg} : {hash: arg.toString('hex')}
-    let [block] = await this.aggregate([
+    let [block] = await Block.aggregate([
       {$match: filter},
       {
         $lookup: {
@@ -69,6 +69,7 @@ export default class BlockService extends Service {
       version: block.header.version,
       prevHash: Buffer.from(block.prevHash, 'hex'),
       merkleRoot: block.header.merkleRoot.buffer,
+      timestamp: block.timestamp,
       bits: block.header.bits,
       nonce: block.header.nonce,
       hashStateRoot: block.header.hashStateRoot.buffer,
@@ -80,13 +81,22 @@ export default class BlockService extends Service {
       size: block.size,
       weight: block.weight,
       transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
-      miner: block.miner && new Address({
+      miner: new Address({
         type: block.miner.type,
-        data: Buffer.from(block.miner.hex, 'hex')
+        data: Buffer.from(block.miner.hex, 'hex'),
+        chain: this.chain
       }),
-      coinStakeValue: block.coinStakeValue && LongtoBigInt(block.coinStakeValue)
+      coinStakeValue: block.coinStakeValue && toBigInt(block.coinStakeValue),
+      isProofOfStake: RawHeader.prototype.isProofOfStake.call({
+        prevOutStakeHash: block.header.prevOutStakeHash.buffer,
+        prevOutStakeN: block.header.prevOutStakeN
+      }),
+      difficulty: new RawHeader({bits: block.header.bits}).difficulty
     }
-    let nextBlock = await this.model('Header').findOne({height: block.height + 1}, '-_id hash', {lean: true})
+    let nextBlock = await Header.collection.findOne(
+      {height: block.height + 1},
+      {projection: {_id: false, hash: true}}
+    )
     result.nextHash = nextBlock && Buffer.from(nextBlock.hash, 'hex')
     return result
   }
@@ -118,6 +128,7 @@ export default class BlockService extends Service {
         version: block.header.version,
         prevHash: Buffer.from(block.prevHash, 'hex'),
         merkleRoot: block.header.merkleRoot.buffer,
+        timestamp: block.header.timestamp,
         bits: block.header.bits,
         nonce: block.header.nonce,
         hashStateRoot: block.header.hashStateRoot.buffer,

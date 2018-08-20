@@ -11,6 +11,7 @@ import Service from './base'
 export default class WebService extends Service {
   constructor(options) {
     super(options)
+    this.port = options.port || this.node.port || 3001
     this.jsonRequestLimit = options.jsonRequestLimit || '100kb'
     this.node.on('ready', () => {
       this.eventNames = this.getEventNames()

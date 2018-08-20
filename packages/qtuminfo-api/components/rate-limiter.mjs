@@ -55,7 +55,7 @@ export default class RateLimiter {
     if (client.type === 'whitelist') {
       await next()
     } else {
-      ctx.set('X-RateLimit-Limit', this.config[this.config.type].totalRequests)
+      ctx.set('X-RateLimit-Limit', this.config[client.type].totalRequests)
       ctx.set('X-RateLimit-Remaining', this.config[client.type].totalRequests - client.visits)
       ctx.rateLimit.exceeded = this.exceeded(client)
       ctx.rateLimit.client = client

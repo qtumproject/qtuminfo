@@ -51,7 +51,7 @@ export function BigInttoBuffer32(n) {
 export function Buffer32toBigInt(buffer) {
   let result = 0n
   for (let i = 0; i < 32; ++i) {
-    result |= BigInt(buffer[31 - i]) << BigInt(i << 8)
+    result |= BigInt(buffer[31 - i]) << BigInt(i << 3)
   }
   return result
 }

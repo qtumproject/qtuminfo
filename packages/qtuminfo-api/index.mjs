@@ -41,7 +41,7 @@ export default class QtuminfoAPIService extends Service {
   setupRoutes(app) {
     if (!this.disableRateLimiter) {
       let limiter = new RateLimiter({node: this.node, ...this.rateLimiterOptions})
-      app.use(limiter.middleware)
+      app.use(limiter.middleware())
     }
     morgan.token('remote-forward-addr', req => this.getRemoteAddress(req))
     let loggerFormat = ':remote-forward-addr ":method :url" :status :res[content-length] :response-time ":user-agent" '
