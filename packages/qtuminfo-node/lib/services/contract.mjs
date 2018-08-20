@@ -974,9 +974,17 @@ export default class ContractService extends Service {
 
   async _fromHexAddress(string) {
     if (await Contract.collection.findOne({address: string}, {projection: {_id: true}})) {
-      return new Address({type: Address.CONTRACT, string, chain: this.chain})
+      return new Address({
+        type: Address.CONTRACT,
+        data: Buffer.from(string, 'hex'),
+        chain: this.chain
+      })
     } else {
-      return new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, string, chain: this.chain})
+      return new Address({
+        type: Address.PAY_TO_PUBLIC_KEY_HASH,
+        data: Buffer.from(string, 'hex'),
+        chain: this.chain
+      })
     }
   }
 }
@@ -994,19 +1002,35 @@ function isQRC721(code) {
 }
 
 function parseQRC20(token) {
+  let totalSupply
+  if ('totalSupply' in token) {
+    if (token.totalSupply.buffer) {
+      totalSupply = BigInt(`0x${token.totalSupply.buffer}`)
+    } else {
+      totalSupply = token.totalSupply
+    }
+  }
   return {
     name: token.name,
     symbol: token.symbol,
     decimals: token.decimals,
-    totalSupply: 'totalSupply' in token.totalSupply ? BigInt(`0x${token.totalSupply}`) : null,
+    totalSupply,
     version: token.version
   }
 }
 
 function parseQRC721(token) {
+  let totalSupply
+  if ('totalSupply' in token) {
+    if (token.totalSupply.buffer) {
+      totalSupply = BigInt(`0x${token.totalSupply.buffer}`)
+    } else {
+      totalSupply = token.totalSupply
+    }
+  }
   return {
     name: token.name,
     symbol: token.symbol,
-    totalSupply: 'totalSupply' in token.totalSupply ? BigInt(`0x${token.totalSupply}`) : null
+    totalSupply
   }
 }
