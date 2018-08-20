@@ -1,6 +1,5 @@
 import mongoose from 'mongoose'
 import {Header as RawHeader} from 'qtuminfo-lib'
-import {BigInttoBuffer32, Buffer32toBigInt} from '../utils'
 
 const headerSchema = new mongoose.Schema({
   hash: {
@@ -29,8 +28,8 @@ const headerSchema = new mongoose.Schema({
   signature: Buffer,
   chainwork: {
     type: Buffer,
-    get: Buffer32toBigInt,
-    set: BigInttoBuffer32
+    get: x => BigInt(`0x${x.toString('hex')}`),
+    set: n => Buffer.from(n.toString(16).padStart(64, '0'), 'hex')
   }
 })
 

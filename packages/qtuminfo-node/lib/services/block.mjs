@@ -5,7 +5,7 @@ import Header from '../models/header'
 import Block from '../models/block'
 import TransactionOutput from '../models/transaction-output'
 import Service from './base'
-import {AsyncQueue, Buffer32toBigInt, toBigInt} from '../utils'
+import {AsyncQueue, toBigInt} from '../utils'
 
 export default class BlockService extends Service {
   constructor(options) {
@@ -77,7 +77,7 @@ export default class BlockService extends Service {
       prevOutStakeHash: block.header.prevOutStakeHash.buffer,
       prevOutStakeN: block.header.prevOutStakeN,
       signature: block.header.signature.buffer,
-      chainwork: Buffer32toBigInt(block.header.chainwork.buffer),
+      chainwork: BigInt(`0x${block.header.chainwork.buffer.toString('hex')}`),
       size: block.size,
       weight: block.weight,
       transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
