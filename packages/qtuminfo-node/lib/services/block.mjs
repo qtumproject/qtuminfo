@@ -33,6 +33,8 @@ export default class BlockService extends Service {
       getBlockTip: this.getTip.bind(this),
       getBlock: this.getBlock.bind(this),
       getRawBlock: this.getRawBlock.bind(this),
+      getBlocksByTimestamp: this.getBlocksByTimestamp.bind(this),
+      getRecentBlocks: this.getRecentBlocks.bind(this),
       syncPercentage: this.syncPercentage.bind(this),
       isSynced: this.isSynced.bind(this)
     }
@@ -139,6 +141,92 @@ export default class BlockService extends Service {
       }),
       transactions
     })
+  }
+
+  async getBlocksByTimestamp({min, max}) {
+    let blocks = await Block.aggregate([
+      {$match: {timestamp: {$gte: min, $lt: max}}},
+      {
+        $lookup: {
+          from: 'headers',
+          localField: 'hash',
+          foreignField: 'hash',
+          as: 'header'
+        }
+      },
+      {
+        $project: {
+          _id: false,
+          hash: '$hash',
+          height: '$height',
+          timestamp: '$timestamp',
+          transactionCount: '$transactionCount',
+          size: '$size',
+          miner: '$miner',
+          prevOutStakeHash: {$arrayElemAt: ['$header.prevOutStakeHash', 0]},
+          prevOutStakeN: {$arrayElemAt: ['$header.prevOutStakeN', 0]}
+        }
+      }
+    ])
+    return blocks.map(block => ({
+      hash: Buffer.from(block.hash, 'hex'),
+      height: block.height,
+      timestamp: block.timestamp,
+      transactionCount: block.transactionCount,
+      size: block.size,
+      miner: new Address({
+        type: block.miner.type,
+        data: Buffer.from(block.miner.hex, 'hex'),
+        chain: this.chain
+      }),
+      isProofOfStake: RawHeader.prototype.isProofOfStake.call({
+        prevOutStakeHash: block.prevOutStakeHash.buffer,
+        prevOutStakeN: block.prevOutStakeN
+      })
+    }))
+  }
+
+  async getRecentBlocks(limit = 10) {
+    let blocks = await Block.aggregate([
+      {$sort: {height: -1}},
+      {$limit: limit},
+      {
+        $lookup: {
+          from: 'headers',
+          localField: 'hash',
+          foreignField: 'hash',
+          as: 'header'
+        }
+      },
+      {
+        $project: {
+          hash: '$hash',
+          height: '$height',
+          timestamp: '$timestamp',
+          transactionCount: '$transactionCount',
+          size: '$size',
+          miner: '$miner',
+          prevOutStakeHash: {$arrayElemAt: ['$header.prevOutStakeHash', 0]},
+          prevOutStakeN: {$arrayElemAt: ['$header.prevOutStakeN', 0]}
+        }
+      }
+    ])
+    return blocks.map(block => ({
+      hash: Buffer.from(block.hash, 'hex'),
+      height: block.height,
+      timestamp: block.timestamp,
+      transactionCount: block.transactionCount,
+      size: block.size,
+      miner: new Address({
+        type: block.miner.type,
+        data: Buffer.from(block.miner.hex, 'hex'),
+        chain: this.chain
+      }),
+      isProofOfStake: RawHeader.prototype.isProofOfStake.call({
+        prevOutStakeHash: block.prevOutStakeHash.buffer,
+        prevOutStakeN: block.prevOutStakeN
+      })
+    }))
   }
 
   async _checkTip() {
