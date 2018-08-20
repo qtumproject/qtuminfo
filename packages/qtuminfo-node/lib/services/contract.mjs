@@ -192,19 +192,41 @@ export default class ContractService extends Service {
 
   async getQRC20TokenTransfers(transaction) {
     let list = []
+    let tokenCache = {}
+    let addressCache = {}
     for (let receipt of transaction.receipts) {
       for (let {address, topics, data} of receipt.logs) {
         if (Buffer.compare(topics[0], TransferABI.id) !== 0 || topics.length !== 3 || data.length !== 32) {
           continue
         }
-        let token = await Contract.findOne({address, type: 'qrc20'})
-        if (!token) {
-          continue
+        let addressString = address.toString('hex')
+        let token
+        if (addressString in tokenCache) {
+          token = tokenCache[addressString]
+        } else {
+          let contract = await Contract.findOne({address, type: 'qrc20'})
+          if (!contract) {
+            continue
+          }
+          tokenCache[addressString] = token = {address, ...parseQRC20(contract.qrc20)}
+        }
+        let fromString = topics[1].slice(12).toString('hex')
+        let toString = topics[2].slice(12).toString('hex')
+        let from
+        let to
+        if (fromString in addressCache) {
+          from = addressCache[fromString]
+        } else {
+          addressCache[fromString] = from = await this._fromHexAddress(fromString)
+        }
+        if (toString in addressCache) {
+          to = addressCache[toString]
+        } else {
+          addressCache[toString] = to = await this._fromHexAddress(toString)
         }
         list.push({
-          token: {address, ...parseQRC20(token.qrc20)},
-          from: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[1].slice(12)),
-          to: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[2].slice(12)),
+          token,
+          from, to,
           amount: BigInt(`0x${data.toString('hex')}`)
         })
       }
@@ -214,19 +236,41 @@ export default class ContractService extends Service {
 
   async getQRC721TokenTransfers(transaction) {
     let list = []
+    let tokenCache = {}
+    let addressCache = {}
     for (let receipt of transaction.receipts) {
       for (let {address, topics} of receipt.logs) {
         if (Buffer.compare(topics[0], TransferABI.id) !== 0 || topics.length !== 4) {
           continue
         }
-        let token = await Contract.findOne({address, type: 'qrc721'})
-        if (!token) {
-          continue
+        let addressString = address.toString('hex')
+        let token
+        if (addressString in tokenCache) {
+          token = tokenCache[addressString]
+        } else {
+          let contract = await Contract.findOne({address, type: 'qrc721'})
+          if (!contract) {
+            continue
+          }
+          tokenCache[addressString] = token = {address, ...parseQRC721(contract.qrc721)}
+        }
+        let fromString = topics[1].slice(12).toString('hex')
+        let toString = topics[2].slice(12).toString('hex')
+        let from
+        let to
+        if (fromString in addressCache) {
+          from = addressCache[fromString]
+        } else {
+          addressCache[fromString] = from = await this._fromHexAddress(fromString)
+        }
+        if (toString in addressCache) {
+          to = addressCache[toString]
+        } else {
+          addressCache[toString] = to = await this._fromHexAddress(toString)
         }
         list.push({
-          token: {address, ...parseQRC721(token.qrc721)},
-          from: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[1].slice(12)),
-          to: Buffer.compare(topics[1], Buffer.alloc(32)) === 0 ? null : this._fromHexAddress(topics[2].slice(12)),
+          token,
+          from, to,
           tokenId: topics[3]
         })
       }
@@ -928,11 +972,11 @@ export default class ContractService extends Service {
     }
   }
 
-  async _fromHexAddress(data) {
-    if (await Contract.findOne({address: data}, '_id', {lean: true})) {
-      return new Address({type: Address.CONTRACT, data, chain: this.chain})
+  async _fromHexAddress(string) {
+    if (await Contract.collection.findOne({address: string}, {projection: {_id: true}})) {
+      return new Address({type: Address.CONTRACT, string, chain: this.chain})
     } else {
-      return new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data, chain: this.chain})
+      return new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, string, chain: this.chain})
     }
   }
 }
