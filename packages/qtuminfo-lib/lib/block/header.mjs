@@ -6,7 +6,7 @@ const GENESIS_BITS = 0x1d00ffff
 export default class Header {
   constructor({
     version, prevHash, merkleRoot, timestamp, bits, nonce,
-    hashStateRoot, hashUTXORoot, prevOutStakeHash, prevOutStakeN, vchBlockSig
+    hashStateRoot, hashUTXORoot, prevOutStakeHash, prevOutStakeN, signature
   }) {
     this.version = version
     this.prevHash = prevHash || Buffer.alloc(32)
@@ -18,7 +18,7 @@ export default class Header {
     this.hashUTXORoot = hashUTXORoot
     this.prevOutStakeHash = prevOutStakeHash
     this.prevOutStakeN = prevOutStakeN
-    this.vchBlockSig = vchBlockSig
+    this.signature = signature
   }
 
   static fromBuffer(buffer) {
@@ -36,10 +36,10 @@ export default class Header {
     let hashUTXORoot = Buffer.from(reader.read(32)).reverse()
     let prevOutStakeHash = Buffer.from(reader.read(32)).reverse()
     let prevOutStakeN = reader.readUInt32LE()
-    let vchBlockSig = reader.readVarLengthBuffer()
+    let signature = reader.readVarLengthBuffer()
     return new Header({
       version, prevHash, merkleRoot, timestamp, bits, nonce,
-      hashStateRoot, hashUTXORoot, prevOutStakeHash, prevOutStakeN, vchBlockSig
+      hashStateRoot, hashUTXORoot, prevOutStakeHash, prevOutStakeN, signature
     })
   }
 
@@ -60,8 +60,7 @@ export default class Header {
     writer.write(Buffer.from(this.hashUTXORoot).reverse())
     writer.write(Buffer.from(this.prevOutStakeHash).reverse())
     writer.writeUInt32LE(this.prevOutStakeN)
-    writer.writeVarintNumber(this.vchBlockSig.length)
-    writer.write(this.vchBlockSig)
+    writer.writeVarLengthBuffer(this.signature)
   }
 
   get id() {
@@ -88,7 +87,7 @@ export default class Header {
         hashUTXORoot: this.hashUTXORoot.toString('hex'),
         prevOutStakeHash: this.prevOutStakeHash.toString('hex'),
         prevOutStakeN: this.prevOutStakeN,
-        vchBlockSig: this.vchBlockSig.toString('hex')
+        signature: this.signature.toString('hex')
       }, null, 2)}`
     }
   }

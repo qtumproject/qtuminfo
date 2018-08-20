@@ -75,7 +75,7 @@ export default class BlockService extends Service {
       hashUTXORoot: block.header.hashUTXORoot.buffer,
       prevOutStakeHash: block.header.prevOutStakeHash.buffer,
       prevOutStakeN: block.header.prevOutStakeN,
-      vchBlockSig: block.header.vchBlockSig.buffer,
+      signature: block.header.signature.buffer,
       chainwork: Buffer32toBigInt(block.header.chainwork.buffer),
       size: block.size,
       weight: block.weight,
@@ -124,7 +124,7 @@ export default class BlockService extends Service {
         hashUTXORoot: block.header.hashUTXORoot.buffer,
         prevOutStakeHash: block.header.prevOutStakeHash.buffer,
         prevOutStakeN: block.header.prevOutStakeN,
-        vchBlockSig: block.header.vchBlockSig.buffer
+        signature: block.header.signature.buffer
       }),
       transactions
     })

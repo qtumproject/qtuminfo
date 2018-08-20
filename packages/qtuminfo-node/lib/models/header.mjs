@@ -26,7 +26,7 @@ const headerSchema = new mongoose.Schema({
   hashUTXORoot: Buffer,
   prevOutStakeHash: Buffer,
   prevOutStakeN: Number,
-  vchBlockSig: Buffer,
+  signature: Buffer,
   chainwork: {
     type: Buffer,
     get: Buffer32toBigInt,
