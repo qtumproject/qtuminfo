@@ -19,6 +19,8 @@ export default class TransactionService extends Service {
     return {
       getTransaction: this.getTransaction.bind(this),
       getRawTransaction: this.getRawTransaction.bind(this),
+      getBlockReward: this.getBlockReward.bind(this),
+      searchLogs: this.searchLogs.bind(this)
     }
   }
 
@@ -233,6 +235,27 @@ export default class TransactionService extends Service {
       witnesses: transaction.witnesses.map(witness => witness.map(item => item.buffer)),
       lockTime: transaction.lockTime
     })
+  }
+
+  async getBlockReward(height, isProofOfStake = true) {
+    if (height === 0) {
+      return 0n
+    }
+    let [result] = await QtumBalanceChanges.aggregate([
+      {
+        $match: {
+          'block.height': height,
+          index: isProofOfStake ? 1 : 0
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          value: {$sum: '$value'}
+        }
+      }
+    ])
+    return result && toBigInt(result.value)
   }
 
   async searchLogs({
