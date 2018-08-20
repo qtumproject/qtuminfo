@@ -150,7 +150,16 @@ export default class TransactionService extends Service {
           : null,
         value: toBigInt(value)
       })),
-      receipts: transaction.receipts
+      receipts: transaction.receipts.map(({gasUsed, contractAddress, excepted, logs}) => ({
+        gasUsed,
+        contractAddress: Buffer.from(contractAddress, 'hex'),
+        excepted,
+        logs: logs.map(({address, topics, data}) => ({
+          address: Buffer.from(address, 'hex'),
+          topics: topics.map(topic => Buffer.from(topic, 'hex')),
+          data: data.buffer
+        }))
+      }))
     }
   }
 
