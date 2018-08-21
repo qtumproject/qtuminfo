@@ -359,7 +359,7 @@ function parseAddresses(addresses) {
   return addresses
     .filter(address => address.type)
     .map(address => {
-      if (address instanceof Address) {
+      if (Object.prototype.toString.call(address) === '[object Address]') {
         return {
           type: address.type === Address.PAY_TO_PUBLIC_KEY ? Address.PAY_TO_PUBLIC_KEY_HASH : address.type,
           hex: address.data.toString('hex')

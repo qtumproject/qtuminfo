@@ -24,6 +24,10 @@ export default class Address {
     this.chain = chain
   }
 
+  get [Symbol.toStringTag]() {
+    return 'Address'
+  }
+
   static fromScript(script, chain, transactionId, outputIndex) {
     script._isOutput = true
     switch (script.type) {
