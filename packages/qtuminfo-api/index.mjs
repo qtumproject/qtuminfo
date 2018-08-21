@@ -9,6 +9,7 @@ import RateLimiter from './components/rate-limiter'
 import AddressesController from './controllers/addresses'
 import BlocksController from './controllers/blocks'
 import ContractsController from './controllers/contracts'
+import MiscController from './controllers/misc'
 import TransactionsController from './controllers/transactions'
 
 export default class QtuminfoAPIService extends Service {
@@ -20,6 +21,7 @@ export default class QtuminfoAPIService extends Service {
     this.addresses = new AddressesController(this.node)
     this.blocks = new BlocksController(this.node)
     this.contracts = new ContractsController(this.node)
+    this.misc = new MiscController(this.node)
     this.transactions = new TransactionsController(this.node)
   }
 
@@ -151,6 +153,11 @@ export default class QtuminfoAPIService extends Service {
       this.contracts.contract.bind(this.contracts),
       this.contracts.richList.bind(this.contracts)
     )
+
+    router.get('/info', this.misc.info.bind(this.misc))
+    router.get('/supply', this.misc.supply.bind(this.misc))
+    router.get('/circulating-supply', this.misc.circulatingSupply.bind(this.misc))
+    router.get('/search/:id', this.misc.classify.bind(this.misc))
 
     router.get(
       '/tx/:id',
