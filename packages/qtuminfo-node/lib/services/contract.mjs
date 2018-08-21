@@ -420,7 +420,7 @@ export default class ContractService extends Service {
           data: [...Object.values(tokens)].map(({token, amount}) => ({
             token: {
               address: Buffer.from(token.address, 'hex'),
-              ...parseQRC20(token.qrc20)
+              ...parseQRC20(token)
             },
             amount
           }))
@@ -493,9 +493,14 @@ export default class ContractService extends Service {
     }
     let hexAddresses = addresses
       .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.CONTRACT].includes(address.type))
-      .map(address => '0'.repeat(24) + address.data.toString('hex'))
+      .map(address => address.data.toString('hex'))
     let list = await QRC20TokenBalance.aggregate([
-      {$match: {address: {$in: hexAddresses}}},
+      {
+        $match: {
+          address: {$in: hexAddresses},
+          balance: {$ne: '0'.repeat(64)}
+        }
+      },
       {
         $group: {
           _id: '$contract',
@@ -512,12 +517,11 @@ export default class ContractService extends Service {
       {
         $lookup: {
           from: 'contracts',
-          localField: '_id',
+          localField: 'contract',
           foreignField: 'address',
           as: 'contract'
         }
       },
-      {$unwind: '$contract'},
       {
         $project: {
           address: {$arrayElemAt: ['$contract.address', 0]},
@@ -1003,12 +1007,10 @@ function isQRC721(code) {
 
 function parseQRC20(token) {
   let totalSupply
-  if ('totalSupply' in token) {
-    if (token.totalSupply.buffer) {
-      totalSupply = BigInt(`0x${token.totalSupply.buffer}`)
-    } else {
-      totalSupply = token.totalSupply
-    }
+  if (typeof token.totalSupply === 'string') {
+    totalSupply = BigInt(`0x${token.totalSupply}`)
+  } else if (token.totalSupply) {
+    totalSupply = token.totalSupply
   }
   return {
     name: token.name,
@@ -1021,12 +1023,10 @@ function parseQRC20(token) {
 
 function parseQRC721(token) {
   let totalSupply
-  if ('totalSupply' in token) {
-    if (token.totalSupply.buffer) {
-      totalSupply = BigInt(`0x${token.totalSupply.buffer}`)
-    } else {
-      totalSupply = token.totalSupply
-    }
+  if (typeof token.totalSupply === 'string') {
+    totalSupply = BigInt(`0x${token.totalSupply}`)
+  } else if (token.totalSupply) {
+    totalSupply = token.totalSupply
   }
   return {
     name: token.name,
