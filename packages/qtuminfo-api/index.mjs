@@ -8,6 +8,7 @@ import Service from 'qtuminfo-node/lib/services/base'
 import RateLimiter from './components/rate-limiter'
 import AddressesController from './controllers/addresses'
 import BlocksController from './controllers/blocks'
+import ContractsController from './controllers/contracts'
 import TransactionsController from './controllers/transactions'
 
 export default class QtuminfoAPIService extends Service {
@@ -18,6 +19,7 @@ export default class QtuminfoAPIService extends Service {
     this._routePrefix = options.routePrefix || this.name
     this.addresses = new AddressesController(this.node)
     this.blocks = new BlocksController(this.node)
+    this.contracts = new ContractsController(this.node)
     this.transactions = new TransactionsController(this.node)
   }
 
@@ -132,6 +134,23 @@ export default class QtuminfoAPIService extends Service {
     router.get('/block/:block', this.blocks.block.bind(this.blocks))
     router.get('/raw-block/:hash', this.blocks.rawBlock.bind(this.blocks))
     router.get('/recent-blocks', this.blocks.recentBlocks.bind(this.blocks))
+
+    router.get('/contract/qrc20-tokens', this.contracts.qrc20Tokens.bind(this.contracts))
+    router.get(
+      '/contract/:contract',
+      this.contracts.contract.bind(this.contracts),
+      this.contracts.show.bind(this.contracts)
+    )
+    router.get(
+      '/contract/:contract/txs',
+      this.contracts.contract.bind(this.contracts),
+      this.contracts.transactions.bind(this.contracts)
+    )
+    router.get(
+      '/contract/:contract/rich-list',
+      this.contracts.contract.bind(this.contracts),
+      this.contracts.richList.bind(this.contracts)
+    )
 
     router.get(
       '/tx/:id',
