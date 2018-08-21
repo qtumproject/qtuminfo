@@ -115,6 +115,7 @@ export default class AddressService extends Service {
           $project: {
             id: '$id',
             block: '$block',
+            index: '$index',
             amount: '$value'
           }
         }]
@@ -131,22 +132,59 @@ export default class AddressService extends Service {
               _id: false,
               id: '$_id',
               block: '$block',
+              index: '$index',
               amount: '$amount'
             }
           }
         ]
     ])
-    return {
-      totalCount: count,
-      transactions: list.map(({id, block, amount}) => ({
-        id: Buffer.from(id, 'hex'),
-        block: {
-          height: block.height,
-          hash: block.hash && Buffer.from(block.hash, 'hex'),
-          timestamp: block.timestamp
+    if (list.length === 0) {
+      return {totalCount: count, transactions: []}
+    } else {
+      if (reversed) {
+        list = list.reverse()
+      }
+      let [initialBalance] = await QtumBalanceChanges.aggregate([
+        {
+          $match: {
+            address: {$in: addresses},
+            $or: [
+              {'block.height': {$lt: list[0].block.height}},
+              {
+                'block.height': list[0].block.height,
+                index: {$lt: list[0].block.index}
+              }
+            ]
+          }
         },
-        amount: toBigInt(amount)
-      }))
+        {
+          $group: {
+            _id: null,
+            balance: {$sum: '$value'}
+          }
+        },
+        {$project: {_id: false, balance: '$balance'}}
+      ])
+      initialBalance = initialBalance ? toBigInt(initialBalance.balance) : 0n
+      for (let item of list) {
+        item.balance = initialBalance += toBigInt(item.amount)
+      }
+      if (reversed) {
+        list = list.reverse()
+      }
+      return {
+        totalCount: count,
+        transactions: list.map(({id, block, amount, balance}) => ({
+          id: Buffer.from(id, 'hex'),
+          block: {
+            height: block.height,
+            hash: block.hash && Buffer.from(block.hash, 'hex'),
+            timestamp: block.timestamp
+          },
+          amount: toBigInt(amount),
+          balance
+        }))
+      }
     }
   }
 
@@ -301,13 +339,13 @@ export default class AddressService extends Service {
       input: null
     })
     return utxoList.map(utxo => ({
-      txid: utxo.output.transactionId,
-      vout: utxo.output.index,
-      scriptPubKey: utxo.output.scriptPubKey,
-      address: Address.fromScript(Script.fromBuffer(utxo.output.scriptPubKey, this.chain)),
+      id: utxo.output.transactionId,
+      index: utxo.output.index,
+      scriptPubKey: Script.fromBuffer(utxo.output.scriptPubKey),
+      address: Address.fromScript(Script.fromBuffer(utxo.output.scriptPubKey), this.chain),
       value: utxo.value,
       isStake: utxo.isStake,
-      height: utxo.output.height,
+      height: utxo.output.height === 0xffffffff ? null : utxo.output.height,
       confirmations: Math.max(this.node.getBlockTip().height - utxo.output.height + 1, 0)
     }))
   }
