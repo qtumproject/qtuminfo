@@ -36,16 +36,34 @@ export default class ContractService extends Service {
       getAddressQRC20TokenBalanceHistory: this.getAddressQRC20TokenBalanceHistory.bind(this),
       listQRC20Tokens: this.listQRC20Tokens.bind(this),
       getAllQRC20TokenBalances: this.getAllQRC20TokenBalances.bind(this),
-      searchQRC20Token: this.searchQRC20Token.bind(this)
+      searchQRC20Token: this.searchQRC20Token.bind(this),
+      getQRC20TokenRichList: this.getQRC20TokenRichList.bind(this)
     }
   }
 
   async getContract(address) {
-    return await Contract.findOne({address}, '-_id')
+    let contract = await Contract.findOne({address}, '-_id')
+    return {
+      address: contract.address.toString('hex'),
+      owner: contract.owner && new Address({
+        type: contract.owner.type,
+        data: contract.owner.hex,
+        chain: this.chain
+      }),
+      createTransactionId: contract.createTransactionId,
+      createHeight: contract.createHeight,
+      type: contract.type,
+      ...contract.qrc20
+        ? {qrc20: parseQRC20(contract.qrc20)}
+        : {},
+      ...contract.qrc721
+        ? {qrc721: parseQRC721(contract.qrc721)}
+        : {}
+    }
   }
 
   async getContractHistory(address, {from = 0, limit = 100, reversed = true} = {}) {
-    address = address.data.toString('hex')
+    address = address.toString('hex')
     let sort = reversed ? {'block.height': -1, index: -1} : {'block.height': 1, index: 1}
     let [{count, list}] = await Transaction.aggregate([
       {
@@ -102,7 +120,7 @@ export default class ContractService extends Service {
   }
 
   async getContractSummary(address) {
-    address = address.data.toString('hex')
+    address = address.toString('hex')
     let totalCount = await Transaction.countDocuments({
       $or: [
         {relatedAddresses: {type: Address.CONTRACT, hex: address}},
@@ -624,6 +642,7 @@ export default class ContractService extends Service {
         }),
         balance: BigInt(`0x${balance}`)
       }))
+      .toArray()
     return {totalCount, list}
   }
 
