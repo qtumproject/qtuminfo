@@ -13,7 +13,7 @@ export default class TransactionsController {
     }
     let transaction = await this.node.getTransaction(Buffer.from(id, 'hex'))
     if (transaction) {
-      ctx.transaction = await this._transformTransaction(transaction, {brief})
+      ctx.state.transaction = await this._transformTransaction(transaction, {brief})
       await next()
     } else {
       ctx.throw(404)
@@ -35,15 +35,15 @@ export default class TransactionsController {
         ctx.throw(404)
       }
     }
-    ctx.transactions = await Promise.all(list.map(transaction => this._transformTransaction(transaction, {brief})))
+    ctx.state.transactions = await Promise.all(list.map(transaction => this._transformTransaction(transaction, {brief})))
     await next()
   }
 
   async show(ctx) {
-    if (ctx.transaction) {
-      ctx.body = ctx.transaction
-    } else if (ctx.transactions) {
-      ctx.body = ctx.transactions
+    if (ctx.state.transaction) {
+      ctx.body = ctx.state.transaction
+    } else if (ctx.state.transactions) {
+      ctx.body = ctx.state.transactions
     }
   }
 

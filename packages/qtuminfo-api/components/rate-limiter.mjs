@@ -45,7 +45,7 @@ export default class RateLimiter {
   async _middleware(ctx, next) {
     let name = RateLimiter.getClientName(ctx)
     let client = this.clients[name]
-    ctx.rateLimit = {
+    ctx.state.rateLimit = {
       clients: this.clients,
       exceeded: false
     }
@@ -57,8 +57,8 @@ export default class RateLimiter {
     } else {
       ctx.set('X-RateLimit-Limit', this.config[client.type].totalRequests)
       ctx.set('X-RateLimit-Remaining', this.config[client.type].totalRequests - client.visits)
-      ctx.rateLimit.exceeded = this.exceeded(client)
-      ctx.rateLimit.client = client
+      ctx.state.rateLimit.exceeded = this.exceeded(client)
+      ctx.state.rateLimit.client = client
       if (this.exceeded(client)) {
         this.node.logger.warn('Rate limited:', client)
         ctx.throw(429, 'Rate Limit Exceeded')
