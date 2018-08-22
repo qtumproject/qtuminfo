@@ -10,6 +10,7 @@ import AddressesController from './controllers/addresses'
 import BlocksController from './controllers/blocks'
 import ContractsController from './controllers/contracts'
 import MiscController from './controllers/misc'
+import StatsController from './controllers/stats'
 import TransactionsController from './controllers/transactions'
 
 export default class QtuminfoAPIService extends Service {
@@ -22,6 +23,7 @@ export default class QtuminfoAPIService extends Service {
     this.blocks = new BlocksController(this.node)
     this.contracts = new ContractsController(this.node)
     this.misc = new MiscController(this.node)
+    this.stats = new StatsController(this.node)
     this.transactions = new TransactionsController(this.node)
   }
 
@@ -160,6 +162,9 @@ export default class QtuminfoAPIService extends Service {
     router.get('/search/:id', this.misc.classify.bind(this.misc))
     router.get('/misc/rich-list', this.misc.richList.bind(this.misc))
     router.get('/misc/biggest-miners', this.misc.biggestMiners.bind(this.misc))
+
+    router.get('/stats/daily-transactions', this.stats.dailyTransactions.bind(this.stats))
+    router.get('/stats/coinstake', this.stats.coinstake.bind(this.stats))
 
     router.get(
       '/tx/:id',
