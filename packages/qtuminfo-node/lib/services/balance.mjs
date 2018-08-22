@@ -279,7 +279,7 @@ export default class BalanceService extends Service {
       {
         $match: {
           'block.height': {$gt: this._tip.height},
-          'balanceChanges.address': {$ne: null}
+          address: {$ne: null}
         }
       },
       {
@@ -288,44 +288,37 @@ export default class BalanceService extends Service {
           value: {$sum: '$value'}
         }
       },
+      {$match: {value: {$ne: 0}}},
+      {
+        $lookup: {
+          from: 'addressinfos',
+          localField: '_id',
+          foreignField: 'address',
+          as: 'original'
+        }
+      },
+      {$match: {'original.createHeight': {$lte: height}}},
       {
         $project: {
           _id: false,
           address: '$_id',
-          balance: '$value'
+          balance: {
+            $subtract: [
+              {$arrayElemAt: ['$original.balance', 0]},
+              '$value'
+            ]
+          }
         }
-      },
-      {$match: {balance: {$ne: 0}}},
-      {$sort: {address: 1}}
-    ]).allowDiskUse(true)
-    if (balanceChanges.length) {
-      let originalBalances = await AddressInfo.collection
-        .find(
-          {address: {$in: balanceChanges.map(item => item.address)}},
-          {
-            sort: {address: 1},
-            projection: {_id: false, balance: true}
-          }
-        )
-        .map(document => document.balance)
-        .toArray()
-      let mergeResult = []
-      for (let i = 0; i < balanceChanges.length; ++i) {
-        mergeResult.push({
-          address: balanceChanges[i].address,
-          balance: BigInttoLong(toBigInt(originalBalances[i]) - toBigInt(balanceChanges[i].balance))
-        })
       }
-      await AddressInfo.collection.bulkWrite(
-        mergeResult.map(({address, balance}) => ({
-          updateOne: {
-            filter: {address},
-            update: {$set: {balance}},
-            upsert: true
-          }
-        }))
-      )
-    }
+    ]).allowDiskUse(true)
+    await AddressInfo.collection.bulkWrite(
+      balanceChanges.map(({address, balance}) => ({
+        updateOne: {
+          filter: {address},
+          update: {$set: {balance}}
+        }
+      }))
+    )
     await AddressInfo.deleteMany({createHeight: {$gt: height}})
     await QtumBalance.deleteMany({height: {$gt: height}})
     this._tip.height = height
