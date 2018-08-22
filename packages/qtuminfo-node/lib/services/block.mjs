@@ -79,7 +79,7 @@ export default class BlockService extends Service {
       prevOutStakeHash: block.header.prevOutStakeHash.buffer,
       prevOutStakeN: block.header.prevOutStakeN,
       signature: block.header.signature.buffer,
-      chainwork: BigInt(`0x${block.header.chainwork.buffer.toString('hex')}`),
+      chainwork: BigInt(`0x${block.header.chainwork.toString('hex')}`),
       size: block.size,
       weight: block.weight,
       transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
