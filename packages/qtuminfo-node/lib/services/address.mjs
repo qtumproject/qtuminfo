@@ -386,7 +386,18 @@ export default class AddressService extends Service {
         }
       }
     ])
-    return {totalCount: count[0].count, list}
+    return {
+      totalCount: count[0].count,
+      list: list.map(({address, blocks, balance}) => ({
+        address: new Address({
+          type: address.type,
+          data: Buffer.from(address.hex, 'hex'),
+          chain: this.chain
+        }),
+        blocks,
+        balance: toBigInt(balance)
+      }))
+    }
   }
 }
 
