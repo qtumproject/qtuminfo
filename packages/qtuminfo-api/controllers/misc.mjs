@@ -110,4 +110,27 @@ export default class MiscController {
     }
     ctx.throw(404)
   }
+
+  async richList(ctx) {
+    let {totalCount, list} = await this.node.getRichList(ctx.state.pagination)
+    ctx.body = {
+      totalCount,
+      list: list.map(({address, balance}) => ({
+        address: address.toString(),
+        balance: balance.toString()
+      }))
+    }
+  }
+
+  async biggestMiners(ctx) {
+    let {totalCount, list} = await this.node.getBiggestMiners(ctx.state.pagination)
+    ctx.body = {
+      totalCount,
+      list: list.map(({address, blocks, balance}) => ({
+        address: address.toString(),
+        blocks,
+        balance: balance.toString()
+      }))
+    }
+  }
 }

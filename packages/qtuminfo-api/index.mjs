@@ -158,6 +158,8 @@ export default class QtuminfoAPIService extends Service {
     router.get('/supply', this.misc.supply.bind(this.misc))
     router.get('/circulating-supply', this.misc.circulatingSupply.bind(this.misc))
     router.get('/search/:id', this.misc.classify.bind(this.misc))
+    router.get('/misc/rich-list', this.misc.richList.bind(this.misc))
+    router.get('/misc/biggest-miners', this.misc.biggestMiners.bind(this.misc))
 
     router.get(
       '/tx/:id',
