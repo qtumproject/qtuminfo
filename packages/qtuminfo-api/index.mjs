@@ -77,19 +77,19 @@ export default class QtuminfoAPIService extends Service {
       let object = {GET: ctx.query, POST: ctx.request.body}[ctx.method]
       ctx.state.pagination = {}
       if ('pageSize' in object) {
-        ctx.state.pageSize = Number.parseInt(object.pageSize)
-        if (!(ctx.state.pageSize > 0)) {
+        ctx.state.pagination.pageSize = Number.parseInt(object.pageSize)
+        if (!(ctx.state.pagination.pageSize > 0)) {
           ctx.throw(400)
         }
       }
       if ('page' in object) {
-        ctx.state.pageIndex = Number.parseInt(object.page)
-        if (!(ctx.state.pageIndex >= 0)) {
+        ctx.state.pagination.pageIndex = Number.parseInt(object.page)
+        if (!(ctx.state.pagination.pageIndex >= 0)) {
           ctx.throw(400)
         }
       }
       if ('reversed' in object) {
-        ctx.state.reversed = ![false, 'false', 0, '0'].includes(object.reversed)
+        ctx.state.pagination.reversed = ![false, 'false', 0, '0'].includes(object.reversed)
       }
       await next()
     })

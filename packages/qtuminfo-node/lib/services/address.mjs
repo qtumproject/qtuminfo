@@ -25,7 +25,7 @@ export default class AddressService extends Service {
     }
   }
 
-  async getAddressHistory(addresses, {from = 0, limit = 100, reversed = true} = {}) {
+  async getAddressHistory(addresses, {pageIndex = 0, pageSize = 100, reversed = true} = {}) {
     addresses = parseAddresses(addresses)
     let hexAddresses = toHexAddresses(addresses)
     let sort = reversed ? {'block.height': -1, index: -1} : {'block.height': 1, index: 1}
@@ -59,8 +59,8 @@ export default class AddressService extends Service {
           count: [{$count: 'count'}],
           list: [
             {$sort: sort},
-            {$skip: from},
-            {$limit: limit},
+            {$skip: pageIndex * pageSize},
+            {$limit: pageSize},
             {$project: {_id: false, id: true}}
           ]
         }
@@ -100,7 +100,7 @@ export default class AddressService extends Service {
 
   async getAddressBalanceHistory(
     addresses,
-    {from = 0, limit = 100, reversed = true} = {}
+    {pageIndex = 0, pageSize = 100, reversed = true} = {}
   ) {
     addresses = parseAddresses(addresses)
     let sort = reversed ? {'block.height': -1, index: -1} : {'block.height': 1, index: 1}
@@ -108,8 +108,8 @@ export default class AddressService extends Service {
     let list = await QtumBalanceChanges.aggregate([
       {$match: {address: {$in: addresses}}},
       {$sort: sort},
-      {$skip: from},
-      {$limit: limit},
+      {$skip: pageIndex * pageSize},
+      {$limit: pageSize},
       ...addresses.length <= 1
         ? [{
           $project: {
@@ -350,7 +350,7 @@ export default class AddressService extends Service {
     }))
   }
 
-  async getBiggestMiners({from = 0, limit = 100} = {}) {
+  async getBiggestMiners({pageIndex = 0, pageSize = 100} = {}) {
     let [{count, list}] = await Block.aggregate([
       {$match: {height: {$gt: 5000}}},
       {
@@ -371,8 +371,8 @@ export default class AddressService extends Service {
           count: [{$count: 'count'}],
           list: [
             {$sort: {blocks: -1}},
-            {$skip: from},
-            {$limit: limit},
+            {$skip: pageIndex * pageSize},
+            {$limit: pageSize},
             {
               $lookup: {
                 from: 'addressinfos',

@@ -62,7 +62,7 @@ export default class ContractService extends Service {
     }
   }
 
-  async getContractHistory(address, {from = 0, limit = 100, reversed = true} = {}) {
+  async getContractHistory(address, {pageIndex = 0, pageSize = 100, reversed = true} = {}) {
     address = address.toString('hex')
     let sort = reversed ? {'block.height': -1, index: -1} : {'block.height': 1, index: 1}
     let [{count, list}] = await Transaction.aggregate([
@@ -101,8 +101,8 @@ export default class ContractService extends Service {
           count: [{$count: 'count'}],
           list: [
             {$sort: sort},
-            {$skip: from},
-            {$limit: limit},
+            {$skip: pageIndex * pageSize},
+            {$limit: pageSize},
             {
               $project: {
                 _id: false,
@@ -296,7 +296,7 @@ export default class ContractService extends Service {
     return list
   }
 
-  async getAddressQRC20TokenBalanceHistory(addresses, tokens, {from = 0, limit = 100, reversed = true} = {}) {
+  async getAddressQRC20TokenBalanceHistory(addresses, tokens, {pageIndex = 0, pageSize = 100, reversed = true} = {}) {
     if (!Array.isArray(addresses)) {
       addresses = [addresses]
     }
@@ -336,8 +336,8 @@ export default class ContractService extends Service {
           count: [{$count: 'count'}],
           list: [
             {$sort: sort},
-            {$skip: from},
-            {$limit: limit},
+            {$skip: pageIndex * pageSize},
+            {$limit: pageSize},
             {$unwind: '$receipts'},
             {$unwind: '$receipts.logs'},
             {
@@ -447,7 +447,7 @@ export default class ContractService extends Service {
     }
   }
 
-  async listQRC20Tokens({from = 0, limit = 100}) {
+  async listQRC20Tokens({pageIndex = 0, pageSize = 100}) {
     let [{count, list}] = await QRC20TokenBalance.aggregate([
       {
         $match: {
@@ -474,8 +474,8 @@ export default class ContractService extends Service {
               }
             },
             {$sort: {holders: -1}},
-            {$skip: from},
-            {$limit: limit},
+            {$skip: pageIndex * pageSize},
+            {$limit: pageSize},
             {
               $lookup: {
                 from: 'contracts',
@@ -613,19 +613,18 @@ export default class ContractService extends Service {
     }))
   }
 
-  async getQRC20TokenRichList(token, {from = 0, limit = 100} = {}) {
-    token = token.toString('hex')
+  async getQRC20TokenRichList(token, {pageIndex = 0, pageSize = 100} = {}) {
     let totalCount = await QRC20TokenBalance.countDocuments({
       contract: token,
-      balance: {$ne: '0'.repeat(64)}
+      balance: {$ne: 0n}
     })
     let list = await QRC20TokenBalance.collection
       .find(
         {contract: token, balance: {$ne: '0'.repeat(64)}},
         {
           sort: {balance: -1},
-          skip: from,
-          limit,
+          skip: pageIndex * pageSize,
+          limit: pageSize,
           projection: {_id: false, address: true, balance: true}
         }
       )

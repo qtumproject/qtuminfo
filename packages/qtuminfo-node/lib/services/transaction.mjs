@@ -275,7 +275,7 @@ export default class TransactionService extends Service {
     fromBlock, toBlock,
     contractAddresses,
     addresses, topics,
-    from = 0, limit = 100, reversed = false
+    pageIndex = 0, pageSize = 100, reversed = false
   }) {
     let elemFilter = {}
     let filter = {}
@@ -385,8 +385,8 @@ export default class TransactionService extends Service {
           ? {'block.height': -1, index: -1, receiptIndex: -1}
           : {'block.height': 1, index: 1, receiptIndex: 1}
       },
-      {$skip: from},
-      {$limit: limit},
+      {$skip: pageIndex * pageSize},
+      {$limit: pageSize},
       {
         $project: {
           id: '$id',

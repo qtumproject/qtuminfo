@@ -49,7 +49,7 @@ export default class BalanceService extends Service {
     }
   }
 
-  async getRichList({height = null, from = 0, limit = 100} = {}) {
+  async getRichList({height = null, pageIndex = 0, pageSize = 100} = {}) {
     if (height === null || height === this._tip.height) {
       await this._waitUntilProcessed()
       let result = await AddressInfo.find(
@@ -57,8 +57,8 @@ export default class BalanceService extends Service {
         '-_id address balance',
         {
           sort: {balance: -1},
-          limit,
-          skip: from
+          limit: pageSize,
+          skip: pageIndex * pageSize
         }
       )
       let count = await AddressInfo.countDocuments({balance: {$ne: 0}})
