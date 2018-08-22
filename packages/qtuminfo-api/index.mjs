@@ -119,7 +119,7 @@ export default class QtuminfoAPIService extends Service {
     router.get(
       '/address/:address/txs',
       this.addresses.checkAddresses.bind(this.addresses),
-      this.addresses.utxo.bind(this.addresses)
+      this.addresses.transactions.bind(this.addresses)
     )
     router.get(
       '/address/:address/balance-history',

@@ -1,4 +1,4 @@
-import {Transaction} from 'qtuminfo-lib'
+import {Transaction, Address} from 'qtuminfo-lib'
 
 export default class TransactionsController {
   constructor(node) {
@@ -133,15 +133,12 @@ export default class TransactionsController {
     }
     transformed.outputs = transaction.outputs.map((output, index) => {
       let type
-      if (output.scriptPubKey.isDataOut()) {
+      let address = Address.fromScript(output.scriptPubKey)
+      if (address) {
+        type = address.type
+      } else if (output.scriptPubKey.isDataOut()) {
         type = 'nulldata'
-      } else if (output.scriptPubKey.isContractCreate()) {
-        type = 'create'
-      } else if (output.scriptPubKey.isContractCall()) {
-        type = 'call'
-      } else if (output.address) {
-        type = 'address'
-      } else if (output.scriptPubKey.isEmpty()) {
+      } else {
         type = 'nonstandard'
       }
       return {

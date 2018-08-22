@@ -34,7 +34,7 @@ export default class BlocksController {
         prevOutStakeHash: block.prevOutStakeHash.toString('hex'),
         prevOutStakeN: block.prevOutStakeN,
         signature: block.signature.toString('hex'),
-        work: block.work.toString(16).padStart(64, '0'),
+        chainwork: block.chainwork.toString(16).padStart(64, '0'),
         size: block.size,
         weight: block.weight,
         transactions: block.transactions.map(id => id.toString('hex')),

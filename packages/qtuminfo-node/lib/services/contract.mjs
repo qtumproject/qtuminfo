@@ -513,12 +513,7 @@ export default class ContractService extends Service {
       .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.CONTRACT].includes(address.type))
       .map(address => address.data.toString('hex'))
     let list = await QRC20TokenBalance.aggregate([
-      {
-        $match: {
-          address: {$in: hexAddresses},
-          balance: {$ne: '0'.repeat(64)}
-        }
-      },
+      {$match: {address: {$in: hexAddresses}}},
       {
         $group: {
           _id: '$contract',

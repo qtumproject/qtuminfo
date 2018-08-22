@@ -120,7 +120,11 @@ export default class TransactionService extends Service {
         })
         result.value = toBigInt(input.value)
         if (input.address) {
-          result.address = new Address({type: input.address.type, data: input.address.hex, chain: this.chain})
+          result.address = new Address({
+            type: input.address.type,
+            data: Buffer.from(input.address.hex, 'hex'),
+            chain: this.chain
+          })
         }
         return result
       }),

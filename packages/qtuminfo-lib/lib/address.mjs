@@ -142,6 +142,7 @@ export default class Address {
     case types.PAY_TO_WITNESS_KEY_HASH:
     case types.PAY_TO_WITNESS_SCRIPT_HASH:
       return SegwitAddress.encode(this.chain.witnesshrp, 0, this.data)
+    case types.CONTRACT:
     case types.CONTRACT_CREATE:
     case types.CONTRACT_CALL:
       return this.data.toString('hex')
