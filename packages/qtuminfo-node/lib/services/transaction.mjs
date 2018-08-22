@@ -493,9 +493,11 @@ export default class TransactionService extends Service {
       await QtumBalanceChanges.updateMany(
         {id: tx.id},
         {
-          hash: block.hash,
-          height: block.height,
-          timestamp: block.header.timestamp
+          block: {
+            hash: block.hash,
+            height: block.height,
+            timestamp: block.header.timestamp
+          }
         }
       )
       await TransactionOutput.bulkWrite([
