@@ -39,7 +39,7 @@ export default class BlocksController {
         weight: block.weight,
         transactions: block.transactions.map(id => id.toString('hex')),
         miner: block.miner.toString(),
-        coinStakeValue: block.coinStakeValue && block.coinStakeValue.toString(),
+        coinstakeValue: block.coinstakeValue && block.coinstakeValue.toString(),
         difficulty: block.difficulty,
         reward: reward.toString(),
         duration,

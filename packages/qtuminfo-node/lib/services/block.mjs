@@ -88,7 +88,7 @@ export default class BlockService extends Service {
         data: Buffer.from(block.miner.hex, 'hex'),
         chain: this.chain
       }),
-      coinStakeValue: block.coinStakeValue && toBigInt(block.coinStakeValue),
+      coinstakeValue: block.coinstakeValue && toBigInt(block.coinstakeValue),
       isProofOfStake: RawHeader.prototype.isProofOfStake.call({
         prevOutStakeHash: block.header.prevOutStakeHash.buffer,
         prevOutStakeN: block.header.prevOutStakeN
@@ -557,7 +557,7 @@ export default class BlockService extends Service {
       header = await Header.findOne({hash: rawBlock.hash}, '-_id height')
     } while (!header)
     let miner
-    let coinStakeValue
+    let coinstakeValue
     if (rawBlock.header.isProofOfStake()) {
       let kernel = rawBlock.transactions[1].inputs[0]
       let txo = await TransactionOutput.findOne({
@@ -565,7 +565,7 @@ export default class BlockService extends Service {
         'output.index': kernel.outputIndex
       }, '-_id address value')
       miner = {type: Address.PAY_TO_PUBLIC_KEY_HASH, data: txo.address.data}
-      coinStakeValue = txo.value
+      coinstakeValue = txo.value
     } else {
       let address = Address.fromScript(rawBlock.transactions[0].outputs[0].scriptPubKey, this.chain)
       if (address.type === Address.PAY_TO_PUBLIC_KEY) {
@@ -583,7 +583,7 @@ export default class BlockService extends Service {
       transactions: rawBlock.transactions.map(transaction => transaction.id),
       transactionCount: rawBlock.transactions.length,
       miner,
-      ...coinStakeValue ? {coinStakeValue} : {}
+      ...coinstakeValue ? {coinstakeValue} : {}
     })
   }
 
