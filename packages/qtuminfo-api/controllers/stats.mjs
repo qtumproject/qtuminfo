@@ -1,24 +1,44 @@
 export default class StatsContoller {
   constructor(node) {
     this.node = node
+    this._cache = {}
+    this._runCache()
+    setInterval(this._runCache.bind(this), 3600 * 1000).unref()
   }
 
   async dailyTransactions(ctx) {
-    let list = await this.node.getDailyTransactions()
-    ctx.body = list.map(({timestamp, count}) => {
-      let time = new Date(timestamp * 86400 * 1000)
-      let year = time.getUTCFullYear()
-      let month = time.getUTCMonth() + 1
-      let date = time.getUTCDate()
-      return {
-        date: `${year}-${month.toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}`,
-        time,
-        transactions: count
-      }
-    })
+    if (!('dailyTransactions' in this._cache)) {
+      this._cache.dailyTransactions = await this.node.getDailyTransactions()
+    }
+    ctx.body = this._cache.dailyTransactions.map(({timestamp, count}) => ({
+      time: new Date(timestamp * 86400 * 1000),
+      transactions: count
+    }))
   }
 
   async coinstake(ctx) {
-    ctx.body = await this.node.getCoinstakeStatistics()
+    if (!('coinstake' in this._cache)) {
+      this._cache.coinstake = await this.node.getCoinstakeStatistics()
+    }
+    ctx.body = this._cache.coinstake
+  }
+
+  async addressGrowth(ctx) {
+    if (!('coinstake' in this._cache)) {
+      this._cache.addressGrowth = await this.node.getAddressGrowth()
+    }
+    ctx.body = this._cache.addressGrowth.map(({timestamp, count}) => ({
+      time: new Date(timestamp * 86400 * 1000),
+      addresses: count
+    }))
+  }
+
+  async _runCache() {
+    if (!('dailyTransactions' in this._cache)) {
+      this._cache.dailyTransactions = await this.node.getDailyTransactions()
+    }
+    this._cache.dailyTransactions = await this.node.getDailyTransactions()
+    this._cache.coinstake = await this.node.getCoinstakeStatistics()
+    this._cache.addressGrowth = await this.node.getAddressGrowth()
   }
 }
