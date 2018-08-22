@@ -21,6 +21,9 @@ export default class ContractsController {
 
   async show(ctx) {
     let contract = ctx.state.contract
+    if (contract.qrc20) {
+      contract.qrc20.holders = await this.node.getQRC20TokenHolders(contract.address)
+    }
     let summary = await this.node.getContractSummary(contract.address)
     let qrc20TokenBalances = await this.node.getAllQRC20TokenBalances(
       new Address({type: Address.CONTRACT, data: contract.address, chain: this.node.chain})
@@ -38,7 +41,8 @@ export default class ContractsController {
             symbol: contract.qrc20.symbol,
             decimals: contract.qrc20.decimals,
             totalSupply: contract.qrc20.totalSupply == null ? null : contract.qrc20.totalSupply.toString(),
-            version: contract.qrc20.version
+            version: contract.qrc20.version,
+            holders: contract.qrc20.holders
           }
         }
         : {},

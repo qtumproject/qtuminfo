@@ -37,6 +37,7 @@ export default class ContractService extends Service {
       listQRC20Tokens: this.listQRC20Tokens.bind(this),
       getAllQRC20TokenBalances: this.getAllQRC20TokenBalances.bind(this),
       searchQRC20Token: this.searchQRC20Token.bind(this),
+      getQRC20TokenHolders: this.getQRC20TokenHolders.bind(this),
       getQRC20TokenRichList: this.getQRC20TokenRichList.bind(this)
     }
   }
@@ -611,6 +612,13 @@ export default class ContractService extends Service {
       ...parseQRC20(qrc20),
       holders
     }))
+  }
+
+  async getQRC20TokenHolders(token) {
+    return await QRC20TokenBalance.countDocuments({
+      contract: token,
+      balance: {$ne: 0n}
+    })
   }
 
   async getQRC20TokenRichList(token, {pageIndex = 0, pageSize = 100} = {}) {
