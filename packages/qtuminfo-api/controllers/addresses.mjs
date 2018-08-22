@@ -118,7 +118,7 @@ export default class AddressesController {
         id: id.toString('hex'),
         blockHeight: block.height === 0xffffffff ? null : block.height,
         timestamp: block.timestamp,
-        data: data.map(({token, amount}) => ({
+        data: data.map(({token, amount, balance}) => ({
           token: {
             address: token.address.toString('hex'),
             name: token.name,
@@ -127,7 +127,8 @@ export default class AddressesController {
             totalSupply: token.totalSupply == null ? null : token.totalSupply.toString(),
             version: token.version
           },
-          amount: amount.toString()
+          amount: amount.toString(),
+          balance: balance.toString()
         }))
       }))
     }

@@ -346,6 +346,7 @@ export default class ContractService extends Service {
                 _id: false,
                 id: '$id',
                 block: '$block',
+                index: '$index',
                 log: '$receipts.logs'
               }
             },
@@ -403,6 +404,7 @@ export default class ContractService extends Service {
                 _id: false,
                 id: '$_id',
                 block: '$block',
+                index: '$index',
                 logs: '$logs'
               }
             }
@@ -411,40 +413,140 @@ export default class ContractService extends Service {
       }
     ])
 
+    if (list.length === 0) {
+      return {
+        totalCount: count.length && count[0].count,
+        transactions: []
+      }
+    }
+
+    let transactions = list.map(({id, block, index, logs}) => {
+      let tokens = {}
+      for (let {token, topics, data} of logs) {
+        let delta = 0n
+        if (hexAddresses.includes(topics[1])) {
+          delta -= BigInt(`0x${data.toString('hex')}`)
+        }
+        if (hexAddresses.includes(topics[2])) {
+          delta += BigInt(`0x${data.toString('hex')}`)
+        }
+        if (token.address in tokens) {
+          tokens[token.address].amount += delta
+        } else {
+          tokens[token.address] = {token, amount: delta}
+        }
+      }
+      return {
+        id: Buffer.from(id, 'hex'),
+        block: {
+          hash: Buffer.from(block.hash, 'hex'),
+          height: block.height,
+          timestamp: block.timestamp
+        },
+        index,
+        data: [...Object.values(tokens)].map(({token, amount}) => ({
+          token: {
+            address: Buffer.from(token.address, 'hex'),
+            ...parseQRC20(token)
+          },
+          amount
+        }))
+      }
+    })
+
+    if (reversed) {
+      transactions.reverse()
+    }
+    let tokenBalances = {}
+    for (let {contract, balance} of await QRC20TokenBalance.find({address: {$in: hexAddresses.map(address => address.slice(24))}})) {
+      let contractString = contract.toString('hex')
+      tokenBalances[contractString] = (tokenBalances[contractString] || 0n) + balance
+    }
+    let previousList = await Transaction.aggregate([
+      {
+        $match: {
+          $or: [
+            {'block.height': {$gt: transactions[0].block.height}},
+            {
+              'block.height': transactions[0].block.height,
+              index: {$gte: transactions[0].index}
+            }
+          ],
+          'receipts.logs': {
+            $elemMatch: {
+              ...tokens === 'all' ? {} : {address: {$in: tokens}},
+              $and: [
+                {topics: TransferABI.id.toString('hex')},
+                {topics: {$size: 3}},
+                {topics: {$in: hexAddresses}},
+                {'topics.0': TransferABI.id.toString('hex')},
+                {
+                  $or: [
+                    {'topics.1': {$in: hexAddresses}},
+                    {'topics.2': {$in: hexAddresses}}
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      {$unwind: '$receipts'},
+      {$unwind: '$receipts.logs'},
+      {
+        $project: {
+          _id: false,
+          log: '$receipts.logs'
+        }
+      },
+      {
+        $match: {
+          ...tokens === 'all' ? {} : {'log.address': {$in: tokens}},
+          $and: [
+            {'log.topics': TransferABI.id.toString('hex')},
+            {'log.topics': {$size: 3}},
+            {'log.topics': {$in: hexAddresses}},
+            {'log.topics.0': TransferABI.id.toString('hex')},
+            {
+              $or: [
+                {'log.topics.1': {$in: hexAddresses}},
+                {'log.topics.2': {$in: hexAddresses}}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        $project: {
+          address: '$log.address',
+          topics: '$log.topics',
+          data: '$log.data'
+        }
+      }
+    ])
+    for (let {address, topics, data} of previousList) {
+      let value = BigInt(`0x${data.toString('hex')}`)
+      if (address in tokenBalances) {
+        if (hexAddresses.includes(topics[1])) {
+          tokenBalances[address] += value
+        }
+        if (hexAddresses.includes(topics[2])) {
+          tokenBalances[address] -= value
+        }
+      }
+    }
+    for (let transaction of transactions) {
+      for (let item of transaction.data) {
+        item.balance = tokenBalances[item.token.address.toString('hex')] += item.amount
+      }
+    }
+    if (reversed) {
+      transactions.reverse()
+    }
+
     return {
       totalCount: count.length && count[0].count,
-      transactions: list.map(({id, block, logs}) => {
-        let tokens = {}
-        for (let {token, topics, data} of logs) {
-          let delta = 0n
-          if (hexAddresses.includes(topics[1])) {
-            delta -= BigInt(`0x${data.toString('hex')}`)
-          }
-          if (hexAddresses.includes(topics[2])) {
-            delta += BigInt(`0x${data.toString('hex')}`)
-          }
-          if (token.address in tokens) {
-            tokens[token.address].amount += delta
-          } else {
-            tokens[token.address] = {token, amount: delta}
-          }
-        }
-        return {
-          id: Buffer.from(id, 'hex'),
-          block: {
-            hash: Buffer.from(block.hash, 'hex'),
-            height: block.height,
-            timestamp: block.timestamp
-          },
-          data: [...Object.values(tokens)].map(({token, amount}) => ({
-            token: {
-              address: Buffer.from(token.address, 'hex'),
-              ...parseQRC20(token)
-            },
-            amount
-          }))
-        }
-      })
+      transactions
     }
   }
 
