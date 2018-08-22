@@ -107,8 +107,8 @@ export default class BalanceService extends Service {
             count: [{$count: 'count'}],
             list: [
               {$sort: {balance: -1}},
-              {$limit: limit},
-              {$skip: from}
+              {$skip: pageSize},
+              {$limit: pageIndex * pageSize}
             ]
           }
         }

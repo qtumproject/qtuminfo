@@ -652,21 +652,17 @@ export default class TransactionService extends Service {
         }
       },
       {
-        $project: {
-          address: '$address',
-          value: {
-            $cond: {
-              if: {$eq: ['$input.transactionId', id]},
-              then: {$subtract: [0, '$value']},
-              else: '$value'
-            }
-          }
-        }
-      },
-      {
         $group: {
           _id: '$address',
-          value: {$sum: '$value'}
+          value: {
+            $sum: {
+              $cond: {
+                if: {$eq: ['$input.transactionId', id]},
+                then: {$subtract: [0, '$value']},
+                else: '$value'
+              }
+}
+          }
         }
       },
       {
