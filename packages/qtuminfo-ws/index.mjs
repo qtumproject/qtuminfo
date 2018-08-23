@@ -9,7 +9,7 @@ export default class QtuminfoWebsocketService extends Service {
   }
 
   static get dependencies() {
-    return ['address', 'balance', 'block', 'contract', 'header', 'mempool', 'transaction', 'web']
+    return ['block', 'header', 'web']
   }
 
   get routePrefix() {

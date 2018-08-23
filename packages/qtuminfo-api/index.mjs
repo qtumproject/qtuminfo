@@ -28,7 +28,7 @@ export default class QtuminfoAPIService extends Service {
   }
 
   static get dependencies() {
-    return ['address', 'balance', 'contract', 'block', 'header', 'mempool', 'transaction', 'web']
+    return ['block', 'header', 'web']
   }
 
   get routePrefix() {
