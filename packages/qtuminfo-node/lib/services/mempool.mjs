@@ -95,6 +95,11 @@ export default class MempoolService extends Service {
       size: tx.size,
       weight: tx.weight
     })
-    // TODO subscriptions
+
+    this.node.getTransaction(tx.id).then(transaction => {
+      for (let subscription of this.subscriptions.transaction) {
+        subscription.emit('mempool/transaction', transaction)
+      }
+    })
   }
 }

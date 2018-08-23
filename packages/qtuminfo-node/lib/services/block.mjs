@@ -569,8 +569,17 @@ export default class BlockService extends Service {
       this._recentBlockHashes.set(rawBlock.hash.toString('hex'), rawBlock.header.prevHash)
       await this._setTip({hash: rawBlock.hash, height: rawBlock.height})
       this._processingBlock = false
-      for (let subscription of this.subscriptions.block) {
-        subscription.emit('block/block', block)
+      this.getBlock(block.hash).then(block => {
+        for (let subscription of this.subscriptions.block) {
+          subscription.emit('block/block', block)
+        }
+      })
+      for (let id of block.transactions) {
+        this.node.getTransaction(id).then(transaction => {
+          for (let subscription of this.subscriptions.transaction) {
+            subscription.emit('block/transaction', transaction)
+          }
+        })
       }
       // TODO subscriptions
     } catch (err) {
