@@ -661,7 +661,7 @@ export default class TransactionService extends Service {
                 then: {$subtract: [0, '$value']},
                 else: '$value'
               }
-}
+            }
           }
         }
       },
