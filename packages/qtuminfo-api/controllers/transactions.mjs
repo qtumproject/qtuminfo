@@ -133,7 +133,7 @@ export default class TransactionsController {
     }
     transformed.outputs = transaction.outputs.map((output, index) => {
       let type
-      let address = Address.fromScript(output.scriptPubKey)
+      let address = Address.fromScript(output.scriptPubKey, this.chain, transaction.id, index)
       if (address) {
         type = address.type
       } else if (output.scriptPubKey.isDataOut()) {
