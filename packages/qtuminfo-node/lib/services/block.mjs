@@ -1,11 +1,13 @@
 import assert from 'assert'
 import LRU from 'lru-cache'
-import {Header as RawHeader, Block as RawBlock, Address} from 'qtuminfo-lib'
+import {Header as RawHeader, Block as RawBlock, Address, Solidity} from 'qtuminfo-lib'
 import Header from '../models/header'
 import Block from '../models/block'
 import TransactionOutput from '../models/transaction-output'
 import Service from './base'
 import {AsyncQueue, toBigInt} from '../utils'
+
+const TransferABI = Solidity.qrc20ABIs.find(abi => abi.name === 'Transfer')
 
 export default class BlockService extends Service {
   constructor(options) {
@@ -569,19 +571,49 @@ export default class BlockService extends Service {
       this._recentBlockHashes.set(rawBlock.hash.toString('hex'), rawBlock.header.prevHash)
       await this._setTip({hash: rawBlock.hash, height: rawBlock.height})
       this._processingBlock = false
-      this.getBlock(block.hash).then(block => {
-        for (let subscription of this.subscriptions.block) {
-          subscription.emit('block/block', block)
-        }
-      })
+      for (let subscription of this.subscriptions.block) {
+        subscription.emit('block/block', rawBlock)
+      }
       for (let id of block.transactions) {
         this.node.getTransaction(id).then(transaction => {
+          let relatedAddresses = new Set()
           for (let subscription of this.subscriptions.transaction) {
             subscription.emit('block/transaction', transaction)
           }
+          for (let {address} of transaction.balanceChanges) {
+            if (address) {
+              relatedAddresses.add(address.toString())
+            }
+          }
+          for (let receipt of transaction.receipts) {
+            for (let log of receipt.logs) {
+              if (log.topics.length >= 3 && Buffer.compare(log.topics[0], TransferABI.id) === 0) {
+                let from = log.topics[1].slice(12)
+                let to = log.topics[2].slice(12)
+                if (Buffer.compare(from, Buffer.alloc(20)) !== 0) {
+                  relatedAddresses.add(
+                    new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data: from, chain: this.chain}).toString()
+                  )
+                  relatedAddresses.add(
+                    new Address({type: Address.CONTRACT, data: from, chain: this.chain}).toString()
+                  )
+                }
+                if (Buffer.compare(to, Buffer.alloc(20)) !== 0) {
+                  relatedAddresses.add(
+                    new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data: to, chain: this.chain}).toString()
+                  )
+                  relatedAddresses.add(
+                    new Address({type: Address.CONTRACT, data: to, chain: this.chain}).toString()
+                  )
+                }
+              }
+            }
+          }
+          for (let subscription of this.subscriptions.address) {
+            subscription.emit('block/address', 'transaction', transaction, [...relatedAddresses])
+          }
         })
       }
-      // TODO subscriptions
     } catch (err) {
       this._processingBlock = false
       throw err

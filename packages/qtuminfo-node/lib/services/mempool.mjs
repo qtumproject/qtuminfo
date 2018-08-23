@@ -8,7 +8,7 @@ import QtumBalanceChanges from '../models/qtum-balance-changes'
 export default class MempoolService extends Service {
   constructor(options) {
     super(options)
-    this.subscriptions = {transaction: []}
+    this.subscriptions = {transaction: [], address: []}
     this._transaction = this.node.services.get('transaction')
     this._enabled = false
   }
@@ -109,6 +109,12 @@ export default class MempoolService extends Service {
     this.node.getTransaction(tx.id).then(transaction => {
       for (let subscription of this.subscriptions.transaction) {
         subscription.emit('mempool/transaction', transaction)
+      }
+      let relatedAddresses = transaction.balanceChanges
+        .filter(item => item.address)
+        .map(item => item.address.toString())
+      for (let subscription of this.subscriptions.address) {
+        subscription.emit('mempool/address', 'transaction', transaction, relatedAddresses)
       }
     })
   }

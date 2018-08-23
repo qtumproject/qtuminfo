@@ -18,14 +18,16 @@ export default class QtuminfoWebsocketService extends Service {
 
   async start() {
     this._bus = this.node.openBus({remoteAddress: 'localhost-qtuminfo-ws'})
-    this._bus.on('mempool/transaction', this._mempoolTransactionEventHandler.bind(this))
-    this._bus.subscribe('mempool/transaction')
     this._bus.on('block/block', this._blockEventHandler.bind(this))
     this._bus.subscribe('block/block')
     this._bus.on('block/transaction', this._transactionEventHandler.bind(this))
     this._bus.subscribe('block/transaction')
-    // this._bus.on('block/address', this._addressEventHandler.bind(this))
-    // this._bus.subscribe('block/address')
+    this._bus.on('mempool/transaction', this._mempoolTransactionEventHandler.bind(this))
+    this._bus.subscribe('mempool/transaction')
+    this._bus.on('block/address', this._addressesEventHandler.bind(this))
+    this._bus.subscribe('block/address')
+    this._bus.on('mempool/address', this._addressesEventHandler.bind(this))
+    this._bus.subscribe('mempool/address')
 
     this._server = new WebSocket.Server({port: this._options.port})
     this._server.on('connection', ws => {
@@ -36,15 +38,13 @@ export default class QtuminfoWebsocketService extends Service {
       }))
       ws.on('message', message => {
         try {
+          message = JSON.parse(message)
           if (message === 'ping') {
             ws.send(JSON.stringify('pong'))
-          } else {
-            message = JSON.parse(message)
-            if (message.type === 'subscribe') {
-              ws.subscriptions.add(message.data)
-            } else if (message.type === 'unsubscribe') {
-              ws.subscriptions.delete(message.data)
-            }
+          } else if (message.type === 'subscribe') {
+            ws.subscriptions.add(message.data)
+          } else if (message.type === 'unsubscribe') {
+            ws.subscriptions.delete(message.data)
           }
         } catch (err) {}
       })
@@ -61,20 +61,7 @@ export default class QtuminfoWebsocketService extends Service {
     return req.headers['x-forwarded-for'] || req.socket.remoteAddress
   }
 
-  async _mempoolTransactionEventHandler(transaction) {
-    transaction = await this._transformTransaction(transaction)
-    for (let client of this._server.clients) {
-      if (client.subscriptions.has('mempool/transaction')) {
-        client.send(JSON.stringify({
-          type: 'mempool/transaction',
-          data: transaction
-        }))
-      }
-    }
-  }
-
   async _blockEventHandler(block) {
-    block = await this._transformBlock(block)
     for (let client of this._server.clients) {
       if (client.subscriptions.has('height')) {
         client.send(JSON.stringify({
@@ -82,23 +69,67 @@ export default class QtuminfoWebsocketService extends Service {
           data: block.height
         }))
       }
+    }
+    let transformedBlock
+    for (let client of this._server.clients) {
       if (client.subscriptions.has('block')) {
+        if (!transformedBlock) {
+          transformedBlock = await this._transformBlock(await this.node.getBlock(block.hash))
+        }
         client.send(JSON.stringify({
           type: 'block',
-          data: block
+          data: transformedBlock
         }))
       }
     }
   }
 
   async _transactionEventHandler(transaction) {
-    transaction = await this._transformTransaction(transaction)
+    let transformedTransaction
     for (let client of this._server.clients) {
       if (client.subscriptions.has(`transaction/${transaction.id}`)) {
+        if (!transformedTransaction) {
+          transformedTransaction = await this._transformTransaction(transaction)
+        }
         client.send(JSON.stringify({
           type: `transaction/${transaction.id}`,
-          data: transaction
+          data: transformedTransaction
         }))
+      }
+    }
+  }
+
+  async _mempoolTransactionEventHandler(transaction) {
+    let transformedTransaction
+    for (let client of this._server.clients) {
+      if (client.subscriptions.has('mempool/transaction')) {
+        if (!transformedTransaction) {
+          transformedTransaction = await this._transformTransaction(transaction)
+        }
+        client.send(JSON.stringify({
+          type: 'mempool/transaction',
+          data: transformedTransaction
+        }))
+      }
+    }
+  }
+
+  async _addressesEventHandler(type, ...args) {
+    if (type === 'transaction') {
+      let [transaction, addresses] = args
+      let transformedTransaction
+      for (let client of this._server.clients) {
+        for (let address of addresses) {
+          if (client.subscriptions.has(`address/${address}/transaction`)) {
+            if (!transformedTransaction) {
+              transformedTransaction = await this._transformTransaction(transaction)
+            }
+            client.send(JSON.stringify({
+              type: `address/${address}/transaction`,
+              data: transformedTransaction
+            }))
+          }
+        }
       }
     }
   }
