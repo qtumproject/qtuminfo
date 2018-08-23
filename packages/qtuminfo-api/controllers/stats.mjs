@@ -3,7 +3,7 @@ export default class StatsContoller {
     this.node = node
     this._cache = {}
     this._runCache()
-    setInterval(this._runCache.bind(this), 3600 * 1000).unref()
+    setInterval(this._runCache.bind(this), 600 * 1000).unref()
   }
 
   async dailyTransactions(ctx) {
