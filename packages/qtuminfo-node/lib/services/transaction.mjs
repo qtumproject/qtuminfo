@@ -150,7 +150,11 @@ export default class TransactionService extends Service {
       size: transaction.size,
       balanceChanges: transaction.balanceChanges.map(({address, value}) => ({
         address: address
-          ? new Address({type: address.type, data: address.hex, chain: this.chain})
+          ? new Address({
+            type: address.type,
+            data: Buffer.from(address.hex, 'hex'),
+            chain: this.chain
+          })
           : null,
         value: toBigInt(value)
       })),
