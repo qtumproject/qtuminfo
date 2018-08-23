@@ -32,7 +32,6 @@
     "no-implied-eval": "error",
     "no-labels": ["error", {"allowLoop": true}],
     "no-lone-blocks": "warn",
-    "no-loop-func": "error",
     "no-multi-spaces": "warn",
     "no-multi-str": "warn",
     "no-new-func": "error",
