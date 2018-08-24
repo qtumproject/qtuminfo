@@ -136,9 +136,9 @@ export default class QtuminfoWebsocketService extends Service {
 
   async _transformBlock(block) {
     let reward = await this.node.getBlockReward(block.height, block.isProofOfStake)
-    let duration
+    let interval
     if (block.height !== 0) {
-      duration = block.timestamp - (await this.node.getBlockHeader(block.prevHash)).timestamp
+      interval = block.timestamp - (await this.node.getBlockHeader(block.prevHash)).timestamp
     }
     return {
       hash: block.hash.toString('hex'),
@@ -163,7 +163,7 @@ export default class QtuminfoWebsocketService extends Service {
       coinstakeValue: block.coinstakeValue && block.coinstakeValue.toString(),
       difficulty: block.difficulty,
       reward: reward.toString(),
-      duration,
+      interval,
       confirmations: this.node.getBlockTip().height - block.height + 1
     }
   }

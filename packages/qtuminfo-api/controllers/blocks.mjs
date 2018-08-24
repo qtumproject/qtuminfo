@@ -15,9 +15,9 @@ export default class BlocksController {
     block = await this.node.getBlock(block)
     if (block) {
       let reward = await this.node.getBlockReward(block.height, block.isProofOfStake)
-      let duration
+      let interval
       if (block.height !== 0) {
-        duration = block.timestamp - (await this.node.getBlockHeader(block.prevHash)).timestamp
+        interval = block.timestamp - (await this.node.getBlockHeader(block.prevHash)).timestamp
       }
       ctx.body = {
         hash: block.hash.toString('hex'),
@@ -42,7 +42,7 @@ export default class BlocksController {
         coinstakeValue: block.coinstakeValue && block.coinstakeValue.toString(),
         difficulty: block.difficulty,
         reward: reward.toString(),
-        duration,
+        interval,
         confirmations: this.node.getBlockTip().height - block.height + 1
       }
     } else {
@@ -92,10 +92,10 @@ export default class BlocksController {
       }
     }))
     for (let i = 1; i < blocks.length; ++i) {
-      blocks[i].duration = blocks[i].timestamp - blocks[i - 1].timestamp
+      blocks[i].interval = blocks[i].timestamp - blocks[i - 1].timestamp
     }
     if (blocks[0].height !== 0) {
-      blocks[0].duration = blocks[0].timestamp - (await this.node.getBlockHeader(blocks[0].height - 1)).timestamp
+      blocks[0].interval = blocks[0].timestamp - (await this.node.getBlockHeader(blocks[0].height - 1)).timestamp
     }
     return blocks
   }
