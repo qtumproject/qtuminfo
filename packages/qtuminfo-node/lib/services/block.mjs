@@ -270,7 +270,7 @@ export default class BlockService extends Service {
     ])
     let list = [{maximum: 0, count: 0}]
     for (let i = 0; i < splitPoints.length; ++i) {
-      list.push({maximum: splitPoints[i], count: queryResult[i][0].count})
+      list.push({maximum: splitPoints[i], count: queryResult[i][0] ? queryResult[i][0].count : 0})
     }
     list.push({maximum: Infinity, count: this.node.getBlockTip().height - 5000})
     let result = []
