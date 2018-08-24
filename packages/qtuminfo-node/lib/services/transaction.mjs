@@ -477,10 +477,15 @@ export default class TransactionService extends Service {
         }
       }
     ])
-    await QtumBalanceChanges.updateMany(
-      {'block.height': {$gt: this._tip.height}},
-      {block: {height: 0xffffffff}}
-    )
+    await QtumBalanceChanges.bulkWrite([
+      {deleteMany: {filter: {id: {$in: outputTransactionIds}}}},
+      {
+        updateMany: {
+          filter: {'block.height': {$gt: this._tip.height}},
+          update: {block: {height: 0xffffffff}}
+        }
+      }
+    ])
   }
 
   async onBlock(block) {
