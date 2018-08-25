@@ -278,7 +278,7 @@ export default class BalanceService extends Service {
     let balanceChanges = await QtumBalanceChanges.aggregate([
       {
         $match: {
-          'block.height': {$gt: this._tip.height},
+          'block.height': {$gt: height},
           address: {$ne: null}
         }
       },

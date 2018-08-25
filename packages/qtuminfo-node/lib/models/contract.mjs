@@ -34,8 +34,8 @@ const contractSchema = new mongoose.Schema({
   owner: addressSchema,
   createTransactionId: {
     type: String,
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex')
+    get: s => s && Buffer.from(s, 'hex'),
+    set: x => x && x.toString('hex')
   },
   createHeight: {type: Number, index: true},
   type: {type: String, index: true},
