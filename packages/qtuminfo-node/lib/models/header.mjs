@@ -30,7 +30,8 @@ const headerSchema = new mongoose.Schema({
     type: Buffer,
     get: x => BigInt(`0x${x.toString('hex')}`),
     set: n => Buffer.from(n.toString(16).padStart(64, '0'), 'hex')
-  }
+  },
+  interval: Number
 })
 
 headerSchema.method('isProofOfStake', function() {

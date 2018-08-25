@@ -148,6 +148,7 @@ export default class HeaderService extends Service {
   _onHeader(header) {
     header.height = this._lastHeader.height + 1
     header.chainwork = this._getChainwork(header, this._lastHeader)
+    header.interval = header.timestamp - this._lastHeader.timestamp
     this._lastHeader = header
     this._tip.height = header.height
     this._tip.hash = header.hash

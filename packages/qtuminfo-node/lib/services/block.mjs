@@ -93,6 +93,7 @@ export default class BlockService extends Service {
         chain: this.chain
       }),
       coinstakeValue: block.coinstakeValue && toBigInt(block.coinstakeValue),
+      interval: block.header.interval,
       isProofOfStake: RawHeader.prototype.isProofOfStake.call({
         prevOutStakeHash: block.header.prevOutStakeHash.buffer,
         prevOutStakeN: block.header.prevOutStakeN
@@ -208,6 +209,7 @@ export default class BlockService extends Service {
           height: '$height',
           timestamp: '$timestamp',
           transactionCount: '$transactionCount',
+          interval: {$arrayElemAt: ['$header.interval', 0]},
           size: '$size',
           miner: '$miner',
           prevOutStakeHash: {$arrayElemAt: ['$header.prevOutStakeHash', 0]},
@@ -220,6 +222,7 @@ export default class BlockService extends Service {
       height: block.height,
       timestamp: block.timestamp,
       transactionCount: block.transactionCount,
+      interval: block.interval,
       size: block.size,
       miner: new Address({
         type: block.miner.type,

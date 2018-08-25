@@ -15,10 +15,6 @@ export default class BlocksController {
     block = await this.node.getBlock(block)
     if (block) {
       let reward = await this.node.getBlockReward(block.height, block.isProofOfStake)
-      let interval
-      if (block.height !== 0) {
-        interval = block.timestamp - (await this.node.getBlockHeader(block.prevHash)).timestamp
-      }
       ctx.body = {
         hash: block.hash.toString('hex'),
         height: block.height,
@@ -35,6 +31,7 @@ export default class BlocksController {
         prevOutStakeN: block.prevOutStakeN,
         signature: block.signature.toString('hex'),
         chainwork: block.chainwork.toString(16).padStart(64, '0'),
+        interval: block.interval,
         size: block.size,
         weight: block.weight,
         transactions: block.transactions.map(id => id.toString('hex')),
@@ -42,7 +39,6 @@ export default class BlocksController {
         coinstakeValue: block.coinstakeValue && block.coinstakeValue.toString(),
         difficulty: block.difficulty,
         reward: reward.toString(),
-        interval,
         confirmations: this.node.getBlockTip().height - block.height + 1
       }
     } else {
@@ -87,16 +83,11 @@ export default class BlocksController {
         timestamp: block.timestamp,
         transactionCount: block.transactionCount,
         size: block.size,
+        interval: block.interval,
         miner: block.miner.toString(),
         reward: reward.toString()
       }
     }))
-    for (let i = 1; i < blocks.length; ++i) {
-      blocks[i].interval = blocks[i].timestamp - blocks[i - 1].timestamp
-    }
-    if (blocks[0].height !== 0) {
-      blocks[0].interval = blocks[0].timestamp - (await this.node.getBlockHeader(blocks[0].height - 1)).timestamp
-    }
     return blocks
   }
 }
