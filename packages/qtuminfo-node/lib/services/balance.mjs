@@ -142,6 +142,7 @@ export default class BalanceService extends Service {
   }
 
   async onBlock(block) {
+    await this._waitUntilProcessed()
     this._processing = true
     if (block.height === 0) {
       let contracts = [0x80, 0x81, 0x82, 0x83, 0x84].map(
@@ -274,6 +275,7 @@ export default class BalanceService extends Service {
   }
 
   async onReorg(height, hash) {
+    await this._waitUntilProcessed()
     this._processing = true
     let balanceChanges = await QtumBalanceChanges.aggregate([
       {
@@ -285,41 +287,20 @@ export default class BalanceService extends Service {
       {
         $group: {
           _id: '$address',
-          value: {$sum: '$value'}
+          value: {$subtract: [0, {$sum: '$value'}]}
         }
       },
-      {$match: {value: {$ne: 0}}},
-      {
-        $lookup: {
-          from: 'addressinfos',
-          localField: '_id',
-          foreignField: 'address',
-          as: 'original'
-        }
-      },
-      {$match: {'original.createHeight': {$lte: height}}},
-      {
-        $project: {
-          _id: false,
-          address: '$_id',
-          balance: {
-            $subtract: [
-              {$arrayElemAt: ['$original.balance', 0]},
-              '$value'
-            ]
-          }
-        }
-      }
+      {$match: {value: {$ne: 0}}}
     ]).allowDiskUse(true)
-    await AddressInfo.collection.bulkWrite(
-      balanceChanges.map(({address, balance}) => ({
+    await AddressInfo.collection.bulkWrite([
+      {deleteMany: {filter: {createHeight: {$gt: height}}}},
+      ...balanceChanges.map(({address, value}) => ({
         updateOne: {
           filter: {address},
-          update: {$set: {balance}}
+          update: {$inc: {balance: value}}
         }
       }))
-    )
-    await AddressInfo.deleteMany({createHeight: {$gt: height}})
+    ])
     await QtumBalance.deleteMany({height: {$gt: height}})
     this._tip.height = height
     this._tip.hash = hash
