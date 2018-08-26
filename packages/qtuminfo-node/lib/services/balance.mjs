@@ -287,7 +287,7 @@ export default class BalanceService extends Service {
       {
         $group: {
           _id: '$address',
-          value: {$subtract: [0, {$sum: '$value'}]}
+          value: {$sum: {$subtract: [0, '$value']}}
         }
       },
       {$match: {value: {$ne: 0}}}

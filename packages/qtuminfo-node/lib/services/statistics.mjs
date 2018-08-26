@@ -1,12 +1,9 @@
+import {Address} from 'qtuminfo-lib'
+import AddressInfo from '../models/address-info'
 import Block from '../models/block'
 import Service from './base'
 
 export default class StatisticsService extends Service {
-  constructor(options) {
-    super(options)
-    this._tip = null
-  }
-
   static get dependencies() {
     return ['block', 'db', 'header']
   }
@@ -14,7 +11,8 @@ export default class StatisticsService extends Service {
   get APIMethods() {
     return {
       getDailyTransactions: this.getDailyTransactions.bind(this),
-      getCoinstakeStatistics: this.getCoinstakeStatistics.bind(this)
+      getCoinstakeStatistics: this.getCoinstakeStatistics.bind(this),
+      getAddressGrowth: this.getAddressGrowth.bind(this)
     }
   }
 
@@ -67,6 +65,52 @@ export default class StatisticsService extends Service {
       }
     }
     result.shift()
+    return result
+  }
+
+  async getAddressGrowth() {
+    let result = await AddressInfo.aggregate([
+      {$match: {type: {$ne: Address.CONTRACT}}},
+      {
+        $group: {
+          _id: '$createHeight',
+          count: {$sum: 1}
+        }
+      },
+      {
+        $lookup: {
+          from: 'blocks',
+          localField: '_id',
+          foreignField: 'height',
+          as: 'block'
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $floor: {
+              $divide: [
+                {$arrayElemAt: ['$block.timestamp', 0]},
+                86400
+              ]
+            }
+          },
+          count: {$sum: '$count'}
+        }
+      },
+      {
+        $project: {
+          _id: false,
+          timestamp: '$_id',
+          count: '$count'
+        }
+      },
+      {$sort: {timestamp: 1}}
+    ])
+    let sum = 0
+    for (let item of result) {
+      item.count = sum += item.count
+    }
     return result
   }
 }
