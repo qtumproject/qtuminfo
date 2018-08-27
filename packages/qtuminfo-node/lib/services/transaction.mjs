@@ -103,7 +103,7 @@ export default class TransactionService extends Service {
           as: 'balanceChanges'
         }
       }
-    ])
+    ]).allowDiskUse(true)
 
     return {
       id: Buffer.from(transaction.id, 'hex'),
@@ -233,7 +233,7 @@ export default class TransactionService extends Service {
           lockTime: {$first: '$lockTime'}
         }
       }
-    ])
+    ]).allowDiskUse(true)
 
     return new RawTransaction({
       version: transaction.version,
