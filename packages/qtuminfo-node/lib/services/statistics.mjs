@@ -1,6 +1,7 @@
 import {Address} from 'qtuminfo-lib'
 import AddressInfo from '../models/address-info'
 import Block from '../models/block'
+import Header from '../models/header'
 import Service from './base'
 
 export default class StatisticsService extends Service {
@@ -11,6 +12,7 @@ export default class StatisticsService extends Service {
   get APIMethods() {
     return {
       getDailyTransactions: this.getDailyTransactions.bind(this),
+      getBlockIntervalStatistics: this.getBlockIntervalStatistics.bind(this),
       getCoinstakeStatistics: this.getCoinstakeStatistics.bind(this),
       getAddressGrowth: this.getAddressGrowth.bind(this)
     }
@@ -32,6 +34,27 @@ export default class StatisticsService extends Service {
         }
       },
       {$sort: {timestamp: 1}}
+    ])
+  }
+
+  async getBlockIntervalStatistics() {
+    return await Header.aggregate([
+      {$match: {height: {$gt: 5001, $lte: this.node.getBlockTip().height}}},
+      {
+        $group: {
+          _id: '$interval',
+          count: {$sum: 1}
+        }
+      },
+      {
+        $project: {
+          _id: false,
+          interval: '$_id',
+          count: '$count',
+          percentage: {$divide: ['$count', this.node.getBlockTip().height - 5001]}
+        }
+      },
+      {$sort: {interval: 1}}
     ])
   }
 

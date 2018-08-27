@@ -164,6 +164,7 @@ export default class QtuminfoAPIService extends Service {
     router.get('/misc/biggest-miners', this.misc.biggestMiners.bind(this.misc))
 
     router.get('/stats/daily-transactions', this.stats.dailyTransactions.bind(this.stats))
+    router.get('/stats/block-interval', this.stats.blockInterval.bind(this.stats))
     router.get('/stats/coinstake', this.stats.coinstake.bind(this.stats))
     router.get('/stats/address-growth', this.stats.addressGrowth.bind(this.stats))
 

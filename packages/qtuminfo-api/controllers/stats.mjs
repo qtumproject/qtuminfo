@@ -16,6 +16,13 @@ export default class StatsContoller {
     }))
   }
 
+  async blockInterval(ctx) {
+    if (!('blockInterval' in this._cache)) {
+      this._cache.blockInterval = await this.node.getBlockIntervalStatistics()
+    }
+    ctx.body = this._cache.blockInterval
+  }
+
   async coinstake(ctx) {
     if (!('coinstake' in this._cache)) {
       this._cache.coinstake = await this.node.getCoinstakeStatistics()
@@ -33,12 +40,12 @@ export default class StatsContoller {
     }))
   }
 
-  async _runCache() {
-    if (!('dailyTransactions' in this._cache)) {
-      this._cache.dailyTransactions = await this.node.getDailyTransactions()
-    }
-    this._cache.dailyTransactions = await this.node.getDailyTransactions()
-    this._cache.coinstake = await this.node.getCoinstakeStatistics()
-    this._cache.addressGrowth = await this.node.getAddressGrowth()
+  _runCache() {
+    try {
+      this.node.getDailyTransactions().then(result => {this._cache.dailyTransactions = result})
+      this.node.getBlockIntervalStatistics().then(result => {this._cache.blockInterval = result})
+      this.node.getCoinstakeStatistics().then(result => {this._cache.coinstake = result})
+      this.node.getAddressGrowth().then(result => {this._cache.addressGrowth = result})
+    } catch (err) {}
   }
 }
