@@ -31,11 +31,20 @@ export default class MiscController {
     try {
       netStakeWeight = (await this._client.getstakinginfo()).netstakeweight
     } catch (err) {}
+    let feeRate
+    try {
+      feeRate = (await this._client.estimatesmartfee(6)).feerate
+    } catch (err) {
+      try {
+        feeRate = await this._client.estimatefee()
+      } catch (err) {}
+    }
     ctx.body = {
       height,
       supply,
       circulatingSupply: this.node.chain === 'mainnet' ? supply - 12e6 : supply,
-      netStakeWeight
+      netStakeWeight,
+      feeRate
     }
   }
 
