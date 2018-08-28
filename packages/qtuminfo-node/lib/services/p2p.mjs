@@ -7,11 +7,16 @@ export default class P2PService extends Service {
   constructor(options) {
     super(options)
     this._options = options
+    this._client = this.node.getRpcClient()
     this._initP2P()
     this._initPubSub()
     this._currentBestHeight = null
     this._outgoingTransactions = LRU(100)
     this._blockCache = options.blockCacheCount || LRU({max: 10, maxAge: 5 * 60 * 1000})
+  }
+
+  static get dependencies() {
+    return ['db']
   }
 
   get APIMethods() {
@@ -21,7 +26,7 @@ export default class P2PService extends Service {
       getHeaders: this.getHeaders.bind(this),
       getMempool: this.getMempool.bind(this),
       getConnections: this.getConnections.bind(this),
-      sendTransaction: this.sendTransaction.bind(this)
+      sendRawTransaction: this.sendRawTransaction.bind(this)
     }
   }
 
@@ -63,16 +68,9 @@ export default class P2PService extends Service {
     this._peer.sendMessage(this._messages.mempool())
   }
 
-  sendTransaction(tx) {
-    let transaction = Transaction.fromBuffer(tx)
-    let id = transaction.id
-    this.logger.info('P2P service: sending transaction:', id.toString('hex'))
-    this._outgoingTransactions.set(id.toString('hex'), transaction)
-    let inventory = Inventory.forTransaction(id)
-    let message = this._messages.inv({inventories: [inventory]})
-    this._peer.sendMessage(message)
-    this._onPeerTransaction(this._peer, {transaction})
-    return id
+  async sendRawTransaction(data) {
+    let id = await this._client.sendrawtransaction(data.toString('hex'))
+    return Buffer.from(id, 'hex')
   }
 
   async start() {

@@ -60,6 +60,15 @@ export default class TransactionsController {
     }
   }
 
+  async send(ctx) {
+    let data = ctx.request.body
+    if (!/^([0-9a-f][0-9a-f])+$/.test(data)) {
+      ctx.throw(400)
+    }
+    let id = await this.node.sendRawTransaction(Buffer.from(data, 'hex'))
+    ctx.body = id.toString('hex')
+  }
+
   async _transformTransaction(transaction, {brief = false} = {}) {
     let confirmations = 'block' in transaction ? this.node.getBlockTip().height - transaction.block.height + 1 : 0
     let inputValue = transaction.inputs.map(input => input.value).reduce((x, y) => x + y)

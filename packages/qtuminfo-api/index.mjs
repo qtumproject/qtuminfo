@@ -178,6 +178,7 @@ export default class QtuminfoAPIService extends Service {
       this.transactions.transactions.bind(this.transactions),
       this.transactions.show.bind(this.transactions)
     )
+    router.post('/tx/send', this.transactions.send.bind(this.transactions))
     router.get('/raw-tx/:id', this.transactions.rawTransaction.bind(this.transactions))
 
     app.use(router.routes()).use(router.allowedMethods())
