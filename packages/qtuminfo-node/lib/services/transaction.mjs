@@ -649,6 +649,37 @@ export default class TransactionService extends Service {
     })
   }
 
+  async removeReplacedTransactions(tx) {
+    let replacedTransactions = await TransactionOutput.collection.distinct(
+      'input.transactionId',
+      {
+        $or: tx.inputs.map(input => ({
+          'output.transactionId': input.prevTxId.toString('hex'),
+          'output.index': input.outputIndex
+        })),
+        input: {$ne: null}
+      }
+    )
+    while (replacedTransactions.length !== 0) {
+      let id = replacedTransactions.pop()
+      replacedTransactions.push(...await TransactionOutput.collection.distinct(
+        'input.transactionId',
+        {'output.transactionId': id}
+      ))
+      await Transaction.deleteMany({id})
+      await TransactionOutput.bulkWrite([
+        {deleteMany: {filter: {'output.transactionId': id}}},
+        {
+          updateMany: {
+            filter: {'input.transactionId': id},
+            update: {$unset: {input: ''}}
+          }
+        }
+      ])
+      await QtumBalanceChanges.deleteMany({id})
+    }
+  }
+
   async getBalanceChanges(id) {
     id = id.toString('hex')
     return await TransactionOutput.aggregate([

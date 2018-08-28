@@ -40,6 +40,7 @@ export default class MempoolService extends Service {
   }
 
   async _onTransaction(tx) {
+    await this._transaction.removeReplacedTransactions(tx)
     let inputTxos = []
     for (let index = 0; index < tx.inputs.length; ++index) {
       let input = tx.inputs[index]
