@@ -9,7 +9,7 @@ export default class QtuminfoWebsocketService extends Service {
   }
 
   static get dependencies() {
-    return ['block', 'header', 'web']
+    return ['block', 'header', 'mempool', 'web']
   }
 
   get routePrefix() {
@@ -85,14 +85,15 @@ export default class QtuminfoWebsocketService extends Service {
   }
 
   async _transactionEventHandler(transaction) {
+    let id = transaction.id.toString('hex')
     let transformedTransaction
     for (let client of this._server.clients) {
-      if (client.subscriptions.has(`transaction/${transaction.id}`)) {
+      if (client.subscriptions.has(`transaction/${id}`)) {
         if (!transformedTransaction) {
           transformedTransaction = await this._transformTransaction(transaction)
         }
         client.send(JSON.stringify({
-          type: `transaction/${transaction.id}`,
+          type: `transaction/${id}`,
           data: transformedTransaction
         }))
       }
