@@ -534,13 +534,6 @@ export default class TransactionService extends Service {
       }
       resultTransaction.index = indexInBlock
       await resultTransaction.save()
-      let balanceChanges = await this.getBalanceChanges(tx.id)
-      tx.balanceChanges = balanceChanges
-        .filter(item => item.address)
-        .map(({address, value}) => ({
-          addressKey: `${address.type}/${address.hex}`,
-          value: toBigInt(value)
-        }))
       return
     }
 
@@ -621,12 +614,6 @@ export default class TransactionService extends Service {
         }
       }
       await QtumBalanceChanges.collection.insertMany(balanceChanges, {ordered: false})
-      tx.balanceChanges = balanceChanges
-        .filter(item => item.address)
-        .map(({address, value}) => ({
-          addressKey: `${address.type}/${address.hex}`,
-          value: LongtoBigInt(value)
-        }))
     }
 
     await Transaction.create({
