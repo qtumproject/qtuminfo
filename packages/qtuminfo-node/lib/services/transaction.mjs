@@ -19,6 +19,7 @@ export default class TransactionService extends Service {
     return {
       getTransaction: this.getTransaction.bind(this),
       getRawTransaction: this.getRawTransaction.bind(this),
+      getRecentTransactions: this.getRecentTransactions.bind(this),
       getBlockReward: this.getBlockReward.bind(this),
       searchLogs: this.searchLogs.bind(this)
     }
@@ -252,6 +253,27 @@ export default class TransactionService extends Service {
       witnesses: transaction.witnesses.map(witness => witness.map(item => item.buffer)),
       lockTime: transaction.lockTime
     })
+  }
+
+  async getRecentTransactions(limit = 10) {
+    let ids = await Transaction.collection
+      .find(
+        {
+          $or: [
+            {'block.height': {$gt: 0, $lte: 5000}, index: {$gt: 0}},
+            {'block.height': {$gt: 5000}, index: {$gt: 1}},
+            {'block.height': 0xffffffff}
+          ]
+        },
+        {
+          sort: {'block.height': -1, index: -1},
+          limit,
+          projection: {_id: false, id: true}
+        }
+      )
+      .map(({id}) => id)
+      .toArray()
+    return await Promise.all(ids.map(id => this.getTransaction(Buffer.from(id, 'hex'))))
   }
 
   async getBlockReward(height, isProofOfStake = true) {

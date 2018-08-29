@@ -60,6 +60,11 @@ export default class TransactionsController {
     }
   }
 
+  async recentTransactions(ctx) {
+    let transactions = await this.node.getRecentTransactions()
+    ctx.body = await Promise.all(transactions.map(transaction => this._transformTransaction(transaction, {brief: true})))
+  }
+
   async send(ctx) {
     let data = ctx.request.body
     if (!/^([0-9a-f][0-9a-f])+$/.test(data)) {
