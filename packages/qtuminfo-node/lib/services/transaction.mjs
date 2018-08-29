@@ -86,7 +86,9 @@ export default class TransactionService extends Service {
             $push: {
               value: '$output.value',
               scriptPubKey: '$output.output.scriptPubKey',
-              address: '$output.address'
+              address: '$output.address',
+              spentTxId: '$output.input.transactionId',
+              spentIndex: '$output.input.index'
             }
           },
           witnesses: {$first: '$witnesses'},
@@ -134,6 +136,10 @@ export default class TransactionService extends Service {
           value: toBigInt(output.value),
           scriptPubKey: Script.fromBuffer(output.scriptPubKey.buffer)
         })
+        if (output.spentTxId) {
+          result.spentTxId = Buffer.from(output.spentTxId, 'hex')
+          result.spentIndex = output.spentIndex
+        }
         result.address = Address.fromScript(result.scriptPubKey, this.chain, transaction.id, index)
         return result
       }),

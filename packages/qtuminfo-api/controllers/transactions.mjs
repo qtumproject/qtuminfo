@@ -126,7 +126,10 @@ export default class TransactionsController {
     } else {
       transformed.inputs = transaction.inputs.map((input, index) => ({
         ...brief
-          ? {}
+          ? {
+            prevTxId: input.prevTxId.toString('hex'),
+            outputIndex: input.outputIndex
+          }
           : {
             prevTxId: input.prevTxId.toString('hex'),
             outputIndex: input.outputIndex,
@@ -167,7 +170,13 @@ export default class TransactionsController {
               hex: output.scriptPubKey.toBuffer().toString('hex'),
               asm: output.scriptPubKey.toString()
             }
-        }
+        },
+        ...output.spentTxId
+          ? {
+            spentTxId: output.spentTxId.toString('hex'),
+            spentIndex: output.spentIndex
+          }
+          : {}
       }
     })
     let qrc20TokenTransfers = await this.node.getQRC20TokenTransfers(transaction)
