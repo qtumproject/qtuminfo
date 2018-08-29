@@ -181,42 +181,26 @@ export default class BalanceService extends Service {
         }
       }
     ]).allowDiskUse(true)
-    let result = await AddressInfo.collection.bulkWrite(
-      balanceChanges.map(({address, value}) => ({
+    await AddressInfo.collection.bulkWrite(
+      balanceChanges.filter(item => item.address).map(({address, value}) => ({
         updateOne: {
           filter: {address},
-          update: {$inc: {balance: BigInttoLong(toBigInt(value))}},
+          update: {
+            $inc: {balance: BigInttoLong(toBigInt(value))},
+            $setOnInsert: {
+              string: new Address({
+                type: address.type,
+                data: Buffer.from(address.hex, 'hex'),
+                chain: this.chain
+              }).toString(),
+              createHeight: block.height
+            }
+          },
           upsert: true
         }
       })),
       {ordered: false}
     )
-    let newAddressOperations = []
-    for (let index of Object.keys(result.upsertedIds)) {
-      let {address} = balanceChanges[index]
-      if (address) {
-        continue
-      }
-      let addressString = new Address({
-        type: address.type,
-        data: Buffer.from(address.hex, 'hex'),
-        chain: this.chain
-      }).toString()
-      newAddressOperations.push({
-        updateOne: {
-          filter: {address},
-          update: {
-            $set: {
-              string: addressString,
-              createHeight: block.height
-            }
-          }
-        }
-      })
-    }
-    if (newAddressOperations.length) {
-      await AddressInfo.collection.bulkWrite(newAddressOperations, {ordered: false})
-    }
 
     this._tip.height = block.height
     this._tip.hash = block.hash
