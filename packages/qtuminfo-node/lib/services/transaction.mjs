@@ -3,7 +3,7 @@ import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
 import QtumBalanceChanges from '../models/qtum-balance-changes'
 import Service from './base'
-import {toBigInt, BigInttoLong, LongtoBigInt} from '../utils'
+import {toBigInt, BigInttoLong} from '../utils'
 
 export default class TransactionService extends Service {
   constructor(options) {
