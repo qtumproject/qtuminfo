@@ -44,7 +44,7 @@ export default class ContractService extends Service {
 
   async getContract(address) {
     let contract = await Contract.findOne({address}, '-_id')
-    return {
+    return contract && {
       address: contract.address.toString('hex'),
       owner: contract.owner && new Address({
         type: contract.owner.type,

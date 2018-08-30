@@ -173,6 +173,8 @@ export default class QtuminfoWebsocketService extends Service {
       id: transaction.id.toString('hex'),
       hash: transaction.hash.toString('hex'),
       version: transaction.version,
+      inputs: [],
+      outputs: [],
       witnesses: transaction.witnesses.map(witness => witness.map(item => item.toString('hex'))),
       lockTime: transaction.lockTime,
       blockHash: transaction.block && transaction.block.hash.toString('hex'),
@@ -196,27 +198,42 @@ export default class QtuminfoWebsocketService extends Service {
         }))
       }))
     }
+
+    let invalidContracts = {}
     if (transformed.isCoinbase) {
-      transformed.inputs = [{
+      transformed.inputs.push({
         coinbase: transaction.inputs[0].scriptSig.toBuffer().toString('hex'),
         sequence: transaction.inputs[0].sequence,
         index: 0
-      }]
+      })
     } else {
-      transformed.inputs = transaction.inputs.map((input, index) => ({
-        prevTxId: input.prevTxId.toString('hex'),
-        outputIndex: input.outputIndex,
-        sequence: input.sequence,
-        index,
-        value: input.value.toString(),
-        address: input.address && input.address.toString(),
-        scriptSig: {
-          hex: input.scriptSig.toBuffer().toString('hex'),
-          asm: input.scriptSig.toString()
+      for (let index = 0; index < transaction.inputs.length; ++index) {
+        let input = transaction.inputs[index]
+        let transformedInput = {
+          prevTxId: input.prevTxId.toString('hex'),
+          outputIndex: input.outputIndex,
+          value: input.value.toString(),
+          address: input.address && input.address.toString(),
+          sequence: input.sequence,
+          index,
+          scriptSig: {
+            hex: input.scriptSig.toBuffer().toString('hex'),
+            asm: input.scriptSig.toString()
+          }
         }
-      }))
+        if (input.address && input.address.type === Address.CONTRACT) {
+          if (transformedInput.address in invalidContracts) {
+            transformedInput.isInvalidContract = invalidContracts[transformedInput.address]
+          } else {
+            invalidContracts[transformedInput.address] = !await this.node.getContract(input.address.data)
+            transformedInput.isInvalidContract = invalidContracts[transformedInput.address]
+          }
+        }
+        transformed.inputs.push(transformedInput)
+      }
     }
-    transformed.outputs = transaction.outputs.map((output, index) => {
+    for (let index = 0; index < transaction.outputs.length; ++index) {
+      let output = transaction.outputs[index]
       let type
       let address = Address.fromScript(output.scriptPubKey, this.chain, transaction.id, index)
       if (address) {
@@ -226,7 +243,7 @@ export default class QtuminfoWebsocketService extends Service {
       } else {
         type = 'nonstandard'
       }
-      return {
+      let transformedOutput = {
         value: output.value.toString(),
         address: output.address && output.address.toString(),
         index,
@@ -234,15 +251,25 @@ export default class QtuminfoWebsocketService extends Service {
           type,
           hex: output.scriptPubKey.toBuffer().toString('hex'),
           asm: output.scriptPubKey.toString()
-        },
-        ...output.spentTxId
-          ? {
-            spentTxId: output.spentTxId.toString('hex'),
-            spentIndex: output.spentIndex
-          }
-          : {}
+        }
       }
-    })
+      if (output.spentTxId) {
+        transformedOutput.spentTxId = output.spentTxId.toString('hex')
+        transformedOutput.spentIndex = output.spentIndex
+      }
+      if (address && [Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
+        if (transformedOutput.address in invalidContracts) {
+          if (invalidContracts[transformedOutput.address]) {
+            transformedOutput.isInvalidContract = true
+          }
+        } else {
+          invalidContracts[transformedOutput.address] = !await this.node.getContract(address.data)
+          transformedOutput.isInvalidContract = invalidContracts[transformedOutput.address]
+        }
+      }
+      transformed.outputs.push(transformedOutput)
+    }
+
     let qrc20TokenTransfers = await this.node.getQRC20TokenTransfers(transaction)
     transformed.qrc20TokenTransfers = qrc20TokenTransfers.map(({token, from, to, amount}) => ({
       token: {
@@ -269,6 +296,7 @@ export default class QtuminfoWebsocketService extends Service {
       to: to && to.toString(),
       tokenId: tokenId.toString('hex')
     }))
+
     return transformed
   }
 }

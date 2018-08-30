@@ -92,6 +92,8 @@ export default class TransactionsController {
       blockHeight: transaction.block && transaction.block.height,
       confirmations,
       timestamp: transaction.block && transaction.block.timestamp,
+      inputs: [],
+      outputs: [],
       isCoinbase: Transaction.prototype.isCoinbase.call(transaction),
       isCoinstake: Transaction.prototype.isCoinstake.call(transaction),
       inputValue: inputValue.toString(),
@@ -113,8 +115,10 @@ export default class TransactionsController {
           }))
         }
     }
+
+    let invalidContracts = {}
     if (transformed.isCoinbase) {
-      transformed.inputs = [{
+      transformed.inputs.push({
         coinbase: transaction.inputs[0].scriptSig.toBuffer().toString('hex'),
         ...brief
           ? {}
@@ -122,33 +126,39 @@ export default class TransactionsController {
             sequence: transaction.inputs[0].sequence,
             index: 0
           }
-      }]
+      })
     } else {
-      transformed.inputs = transaction.inputs.map((input, index) => ({
-        ...brief
-          ? {
-            prevTxId: input.prevTxId.toString('hex'),
-            outputIndex: input.outputIndex
+      for (let index = 0; index < transaction.inputs.length; ++index) {
+        let input = transaction.inputs[index]
+        let transformedInput = {
+          prevTxId: input.prevTxId.toString('hex'),
+          outputIndex: input.outputIndex,
+          value: input.value.toString(),
+          address: input.address && input.address.toString()
+        }
+        if (!brief) {
+          transformedInput.sequence = input.sequence
+          transformedInput.index = index
+          transformedInput.scriptSig = {
+            hex: input.scriptSig.toBuffer().toString('hex'),
+            asm: input.scriptSig.toString()
           }
-          : {
-            prevTxId: input.prevTxId.toString('hex'),
-            outputIndex: input.outputIndex,
-            sequence: input.sequence,
-            index
-          },
-        value: input.value.toString(),
-        address: input.address && input.address.toString(),
-        ...brief
-          ? {}
-          : {
-            scriptSig: {
-              hex: input.scriptSig.toBuffer().toString('hex'),
-              asm: input.scriptSig.toString()
+        }
+        if (input.address && input.address.type === Address.CONTRACT) {
+          if (transformedInput.address in invalidContracts) {
+            if (invalidContracts[transformedInput.address]) {
+              transformedInput.isInvalidContract = true
             }
+          } else {
+            invalidContracts[transformedInput.address] = !await this.node.getContract(input.address.data)
+            transformedInput.isInvalidContract = invalidContracts[transformedInput.address]
           }
-      }))
+        }
+        transformed.inputs.push(transformedInput)
+      }
     }
-    transformed.outputs = transaction.outputs.map((output, index) => {
+    for (let index = 0; index < transaction.outputs.length; ++index) {
+      let output = transaction.outputs[index]
       let type
       let address = Address.fromScript(output.scriptPubKey, this.chain, transaction.id, index)
       if (address) {
@@ -158,27 +168,31 @@ export default class TransactionsController {
       } else {
         type = 'nonstandard'
       }
-      return {
+      let transformedOutput = {
         value: output.value.toString(),
         address: output.address && output.address.toString(),
         index,
-        scriptPubKey: {
-          type,
-          ...brief
-            ? {}
-            : {
-              hex: output.scriptPubKey.toBuffer().toString('hex'),
-              asm: output.scriptPubKey.toString()
-            }
-        },
-        ...output.spentTxId
-          ? {
-            spentTxId: output.spentTxId.toString('hex'),
-            spentIndex: output.spentIndex
-          }
-          : {}
+        scriptPubKey: {type}
       }
-    })
+      if (!brief) {
+        transformedOutput.scriptPubKey.hex = output.scriptPubKey.toBuffer().toString('hex')
+        transformedOutput.scriptPubKey.asm = output.scriptPubKey.toString()
+      }
+      if (output.spentTxId) {
+        transformedOutput.spentTxId = output.spentTxId.toString('hex')
+        transformedOutput.spentIndex = output.spentIndex
+      }
+      if (address && [Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
+        if (transformedOutput.address in invalidContracts) {
+          transformedOutput.isInvalidContract = invalidContracts[transformedOutput.address]
+        } else {
+          invalidContracts[transformedOutput.address] = !await this.node.getContract(address.data)
+          transformedOutput.isInvalidContract = invalidContracts[transformedOutput.address]
+        }
+      }
+      transformed.outputs.push(transformedOutput)
+    }
+
     let qrc20TokenTransfers = await this.node.getQRC20TokenTransfers(transaction)
     transformed.qrc20TokenTransfers = qrc20TokenTransfers.map(({token, from, to, amount}) => ({
       token: {
@@ -205,6 +219,7 @@ export default class TransactionsController {
       to: to && to.toString(),
       tokenId: tokenId.toString('hex')
     }))
+
     return transformed
   }
 }
