@@ -259,7 +259,7 @@ export default class AddressService extends Service {
       {
         $match: {
           'output.height': {$ne: 0},
-          input: null,
+          spent: null,
           address: {$in: addresses}
         }
       },
@@ -278,7 +278,7 @@ export default class AddressService extends Service {
       {
         $match: {
           'output.height': 0xffffffff,
-          input: null,
+          spent: null,
           address: {$in: addresses}
         }
       },
@@ -317,7 +317,7 @@ export default class AddressService extends Service {
       {
         $match: {
           'output.height': {$gt: 0, $lte: this.node.getBlockTip().height - 500},
-          input: null,
+          spent: null,
           address: {$in: addresses}
         }
       },
@@ -336,7 +336,7 @@ export default class AddressService extends Service {
     let utxoList = await TransactionOutput.find({
       address: {$in: addresses},
       'output.height': {$ne: 0},
-      input: null
+      spent: null
     })
     return utxoList.map(utxo => ({
       id: utxo.output.transactionId,

@@ -32,7 +32,7 @@ export default class TransactionService extends Service {
         $lookup: {
           from: 'transactionoutputs',
           localField: 'id',
-          foreignField: 'input.transactionId',
+          foreignField: 'spent.transactionId',
           as: 'input'
         }
       },
@@ -50,8 +50,8 @@ export default class TransactionService extends Service {
             $push: {
               prevTxId: '$input.output.transactionId',
               outputIndex: '$input.output.index',
-              scriptSig: '$input.input.scriptSig',
-              sequence: '$input.input.sequence',
+              scriptSig: '$input.spent.scriptSig',
+              sequence: '$input.spent.sequence',
               value: '$input.value',
               address: '$input.address'
             }
@@ -87,8 +87,8 @@ export default class TransactionService extends Service {
               value: '$output.value',
               scriptPubKey: '$output.output.scriptPubKey',
               address: '$output.address',
-              spentTxId: '$output.input.transactionId',
-              spentIndex: '$output.input.index'
+              spentTxId: '$output.spent.transactionId',
+              spentIndex: '$output.spent.index'
             }
           },
           witnesses: {$first: '$witnesses'},
@@ -185,7 +185,7 @@ export default class TransactionService extends Service {
         $lookup: {
           from: 'transactionoutputs',
           localField: 'id',
-          foreignField: 'input.transactionId',
+          foreignField: 'spent.transactionId',
           as: 'input'
         }
       },
@@ -203,8 +203,8 @@ export default class TransactionService extends Service {
             $push: {
               prevTxId: '$input.output.transactionId',
               outputIndex: '$input.output.index',
-              scriptSig: '$input.input.scriptSig',
-              sequence: '$input.input.sequence'
+              scriptSig: '$input.spent.scriptSig',
+              sequence: '$input.spent.sequence'
             }
           },
           witnesses: {$first: '$witnesses'},
@@ -461,8 +461,8 @@ export default class TransactionService extends Service {
       {deleteMany: {filter: {'output.height': {$gt: this._tip.height}}}},
       {
         updateMany: {
-          filter: {'input.height': {$gt: this._tip.height}},
-          update: {$unset: {input: ''}}
+          filter: {'spent.height': {$gt: this._tip.height}},
+          update: {$unset: {spent: ''}}
         }
       }
     ])
@@ -500,8 +500,8 @@ export default class TransactionService extends Service {
       },
       {
         updateMany: {
-          filter: {'input.height': {$gt: height}},
-          update: {'input.height': 0xffffffff}
+          filter: {'spent.height': {$gt: height}},
+          update: {'spent.height': 0xffffffff}
         }
       }
     ])
@@ -544,8 +544,8 @@ export default class TransactionService extends Service {
       await TransactionOutput.bulkWrite([
         {
           updateMany: {
-            filter: {'input.transactionId': tx.id},
-            update: {'input.height': block.height}
+            filter: {'spent.transactionId': tx.id},
+            update: {'spent.height': block.height}
           }
         },
         {
@@ -570,7 +570,7 @@ export default class TransactionService extends Service {
         return {
           insertOne: {
             document: {
-              input: {
+              spent: {
                 height: block.height,
                 transactionId: tx.id,
                 index,
@@ -588,7 +588,7 @@ export default class TransactionService extends Service {
               'output.index': input.outputIndex
             },
             update: {
-              input: {
+              spent: {
                 height: block.height,
                 transactionId: tx.id,
                 index,
@@ -666,19 +666,19 @@ export default class TransactionService extends Service {
 
   async removeReplacedTransactions(tx) {
     let replacedTransactions = await TransactionOutput.collection.distinct(
-      'input.transactionId',
+      'spent.transactionId',
       {
         $or: tx.inputs.map(input => ({
           'output.transactionId': input.prevTxId.toString('hex'),
           'output.index': input.outputIndex
         })),
-        input: {$ne: null}
+        spent: {$ne: null}
       }
     )
     while (replacedTransactions.length !== 0) {
       let id = replacedTransactions.pop()
       replacedTransactions.push(...await TransactionOutput.collection.distinct(
-        'input.transactionId',
+        'spent.transactionId',
         {'output.transactionId': id}
       ))
       await Transaction.deleteMany({id})
@@ -686,8 +686,8 @@ export default class TransactionService extends Service {
         {deleteMany: {filter: {'output.transactionId': id}}},
         {
           updateMany: {
-            filter: {'input.transactionId': id},
-            update: {$unset: {input: ''}}
+            filter: {'spent.transactionId': id},
+            update: {$unset: {spent: ''}}
           }
         }
       ])
@@ -701,8 +701,8 @@ export default class TransactionService extends Service {
       {
         $match: {
           $or: [
-            {'input.transactionId': id},
             {'output.transactionId': id},
+            {'spent.transactionId': id}
           ]
         }
       },
@@ -712,7 +712,7 @@ export default class TransactionService extends Service {
           value: {
             $sum: {
               $cond: {
-                if: {$eq: ['$input.transactionId', id]},
+                if: {$eq: ['$spent.transactionId', id]},
                 then: {$subtract: [0, '$value']},
                 else: '$value'
               }

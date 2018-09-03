@@ -83,8 +83,8 @@ export default class BalanceService extends Service {
             value: {$ne: 0},
             'output.height': {$gt: 0, $lte: height},
             $or: [
-              {input: null},
-              {'input.height': {$gt: height}}
+              {spent: null},
+              {'spent.height': {$gt: height}}
             ]
           }
         },
@@ -270,8 +270,8 @@ export default class BalanceService extends Service {
           value: {$ne: 0},
           'output.height': {$gt: 0, $lte: this._tip.height},
           $or: [
-            {input: null},
-            {'input.height': {$gt: this._tip.height}}
+            {spent: null},
+            {'spent.height': {$gt: this._tip.height}}
           ]
         }
       },

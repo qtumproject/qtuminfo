@@ -49,7 +49,7 @@ export default class MempoolService extends Service {
         'output.index': input.outputIndex
       })
       if (txo) {
-        txo.input = {
+        txo.spent = {
           height: 0xffffffff,
           transactionId: tx.id,
           index,

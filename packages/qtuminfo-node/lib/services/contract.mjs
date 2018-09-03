@@ -791,8 +791,8 @@ export default class ContractService extends Service {
             continue
           }
           let {address: ownerAddress} = await TransactionOutput.findOne({
-            'input.transactionId': transaction.id.toString('hex'),
-            'input.index': 0
+            'spent.transactionId': transaction.id.toString('hex'),
+            'spent.index': 0
           }, '-_id address')
           let owner
           if (ownerAddress) {

@@ -17,7 +17,7 @@ const outputSchema = new mongoose.Schema({
 }, {_id: false})
 outputSchema.index({transactionId: 1, index: 1})
 
-const inputSchema = new mongoose.Schema({
+const spentSchema = new mongoose.Schema({
   height: {type: Number, index: true},
   transactionId: {
     type: String,
@@ -28,11 +28,11 @@ const inputSchema = new mongoose.Schema({
   scriptSig: Buffer,
   sequence: Number
 }, {_id: false})
-inputSchema.index({transactionId: 1, index: 1})
+spentSchema.index({transactionId: 1, index: 1})
 
 const transactionOutputSchema = new mongoose.Schema({
   output: outputSchema,
-  input: inputSchema,
+  spent: spentSchema,
   address: {type: addressSchema, index: true},
   value: {
     type: mongoose.Schema.Types.Long,
