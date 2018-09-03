@@ -214,17 +214,24 @@ export default class BalanceService extends Service {
     let balanceChanges = await QtumBalanceChanges.aggregate([
       {
         $match: {
-          'block.height': {$gt: height},
+          'block.height': {$gt: height, $lt: 0xffffffff},
           address: {$ne: null}
         }
       },
       {
         $group: {
           _id: '$address',
-          value: {$sum: {$subtract: [0, '$value']}}
+          value: {$sum: '$value'}
         }
       },
-      {$match: {value: {$ne: 0}}}
+      {$match: {value: {$ne: 0}}},
+      {
+        $project: {
+          _id: false,
+          address: '$_id',
+          value: {$subtract: [0, '$value']}
+        }
+      }
     ]).allowDiskUse(true)
     await AddressInfo.collection.bulkWrite([
       {deleteMany: {filter: {createHeight: {$gt: height}}}},
