@@ -140,7 +140,7 @@ export default class TransactionService extends Service {
           result.spentTxId = Buffer.from(output.spentTxId, 'hex')
           result.spentIndex = output.spentIndex
         }
-        result.address = Address.fromScript(result.scriptPubKey, this.chain, transaction.id, index)
+        result.address = Address.fromScript(result.scriptPubKey, this.chain, Buffer.from(transaction.id, 'hex'), index)
         return result
       }),
       witnesses: transaction.witnesses.map(witness => witness.map(item => item.buffer)),
