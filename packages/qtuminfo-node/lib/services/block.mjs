@@ -149,6 +149,7 @@ export default class BlockService extends Service {
   async getBlocksByTimestamp({min, max}) {
     let blocks = await Block.aggregate([
       {$match: {timestamp: {$gte: min, $lt: max}}},
+      {$sort: {height: -1}},
       {
         $lookup: {
           from: 'headers',
