@@ -930,7 +930,11 @@ export default class ContractService extends Service {
       } catch (err) {}
       try {
         contract.qrc721.totalSupply = BigInt((await totalSupplyResult)[0].toString())
-      } catch (err) {}
+      } catch (err) {
+        contract.type = ''
+        contract.tags = []
+        delete contract.qrc721
+      }
     } else if (isQRC20(code)) {
       contract.type = 'qrc20'
       contract.tags = ['qrc20']
@@ -954,11 +958,15 @@ export default class ContractService extends Service {
         contract.qrc20.decimals = (await decimalsResult)[0].toNumber()
       } catch (err) {}
       try {
-        contract.qrc20.totalSupply = BigInt((await totalSupplyResult)[0].toString())
-      } catch (err) {}
-      try {
         contract.qrc20.version = (await versionResult)[0]
       } catch (err) {}
+      try {
+        contract.qrc20.totalSupply = BigInt((await totalSupplyResult)[0].toString())
+      } catch (err) {
+        contract.type = ''
+        contract.tags = []
+        delete contract.qrc20
+      }
     }
     return await contract.save()
   }
