@@ -31,7 +31,7 @@ export default class StatsContoller {
   }
 
   async addressGrowth(ctx) {
-    if (!('coinstake' in this._cache)) {
+    if (!('addressGrowth' in this._cache)) {
       this._cache.addressGrowth = await this.node.getAddressGrowth()
     }
     ctx.body = this._cache.addressGrowth.map(({timestamp, count}) => ({
