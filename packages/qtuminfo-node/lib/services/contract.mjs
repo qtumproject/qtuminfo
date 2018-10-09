@@ -115,7 +115,7 @@ export default class ContractService extends Service {
       }
     ])
     return {
-      totalCount: count[0].count,
+      totalCount: count.length && count[0].count,
       transactions: list.map(tx => Buffer.from(tx.id, 'hex'))
     }
   }
