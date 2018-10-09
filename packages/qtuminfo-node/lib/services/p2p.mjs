@@ -1,5 +1,4 @@
 import LRU from 'lru-cache'
-import {Transaction} from 'qtuminfo-lib'
 import {Pool, Messages, Inventory} from 'qtuminfo-p2p'
 import Service from './base'
 
