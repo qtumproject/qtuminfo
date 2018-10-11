@@ -258,8 +258,8 @@ export default class ContractService extends Service {
     let tokenCache = {}
     let addressCache = {}
     for (let receipt of transaction.receipts) {
-      for (let {address, topics} of receipt.logs) {
-        if (Buffer.compare(topics[0], TransferABI.id) !== 0 || topics.length !== 4) {
+      for (let {address, topics, data} of receipt.logs) {
+        if (Buffer.compare(topics[0], TransferABI.id) !== 0 || topics.length !== 3 && topics.length !== 4) {
           continue
         }
         let addressString = address.toString('hex')
@@ -290,7 +290,7 @@ export default class ContractService extends Service {
         list.push({
           token,
           from, to,
-          tokenId: topics[3]
+          tokenId: topics[3] || data.toString('hex')
         })
       }
     }
