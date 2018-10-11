@@ -1067,7 +1067,11 @@ export default class ContractService extends Service {
       if (contract) {
         try {
           let [totalSupply] = await this._callMethod(Buffer.from(address, 'hex'), totalSupplyABI)
-          contract.qrc20.totalSupply = BigInt(totalSupply.toString())
+          if (contract.type === 'qrc20') {
+            contract.qrc20.totalSupply = BigInt(totalSupply.toString())
+          } else {
+            contract.qrc721.totalSupply = BigInt(totalSupply.toString())
+          }
         } catch (err) {
           continue
         }

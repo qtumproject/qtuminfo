@@ -49,9 +49,9 @@ export default class ContractsController {
       ...contract.qrc721
         ? {
           qrc721: {
-            name: contract.qrc20.name,
-            symbol: contract.qrc20.symbol,
-            totalSupply: contract.qrc20.totalSupply == null ? null : contract.qrc20.totalSupply.toString()
+            name: contract.qrc721.name,
+            symbol: contract.qrc721.symbol,
+            totalSupply: contract.qrc721.totalSupply == null ? null : contract.qrc721.totalSupply.toString()
           }
         }
         : {},
