@@ -107,7 +107,7 @@ export default class BlockService extends Service {
   }
 
   async getRawBlock(hash) {
-    let [block] = await this.aggregate([
+    let [block] = await Block.aggregate([
       {$match: {hash: hash.toString('hex')}},
       {
         $lookup: {

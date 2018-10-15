@@ -8,7 +8,7 @@ export default class MiscController {
 
   async info(ctx) {
     let {height} = this.node.getBlockTip()
-    if (this.node.chain === 'regtest') {
+    if (this.node.chain.name === 'regtest') {
       ctx.body = height * 20000
       return
     }
@@ -42,7 +42,7 @@ export default class MiscController {
     ctx.body = {
       height,
       supply,
-      circulatingSupply: this.node.chain === 'mainnet' ? supply - 12e6 : supply,
+      circulatingSupply: this.node.chain.name === 'mainnet' ? supply - 12e6 : supply,
       netStakeWeight,
       feeRate
     }
@@ -50,7 +50,7 @@ export default class MiscController {
 
   async supply(ctx) {
     let {height} = this.node.getBlockTip()
-    if (this.node.chain === 'regtest' || height <= 5000) {
+    if (this.node.chain.name === 'regtest' || height <= 5000) {
       ctx.body = height * 20000
     } else {
       let supply = 1e8
@@ -68,8 +68,8 @@ export default class MiscController {
 
   async circulatingSupply(ctx) {
     let {height} = this.node.getBlockTip()
-    if (this.node.chain === 'regtest' || height <= 5000) {
-      ctx.body = this.node.chain === 'mainnet' ? height * 20000 - 12e6 : height * 20000
+    if (this.node.chain.name === 'regtest' || height <= 5000) {
+      ctx.body = this.node.chain.name === 'mainnet' ? height * 20000 - 12e6 : height * 20000
     } else {
       let supply = 1e8
       let reward = 4
@@ -81,7 +81,7 @@ export default class MiscController {
         stakeHeight -= interval
       }
       supply += stakeHeight * (reward >>> halvings)
-      ctx.body = this.node.chain === 'mainnet' ? supply - 12e6 : supply
+      ctx.body = this.node.chain.name === 'mainnet' ? supply - 12e6 : supply
     }
   }
 
