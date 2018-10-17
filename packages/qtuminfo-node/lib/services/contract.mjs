@@ -915,31 +915,26 @@ export default class ContractService extends Service {
       code
     )
     if (isQRC721(code)) {
-      contract.type = 'qrc721'
-      contract.tags = ['qrc721']
-      contract.qrc721 = {}
+      let qrc721Params = {}
       let [nameResult, symbolResult, totalSupplyResult] = await this._batchCallMethods([
         {address, abi: Solidity.qrc721ABIs.find(abi => abi.name === 'name')},
         {address, abi: Solidity.qrc721ABIs.find(abi => abi.name === 'symbol')},
         {address, abi: Solidity.qrc721ABIs.find(abi => abi.name === 'totalSupply')}
       ])
       try {
-        contract.qrc721.name = (await nameResult)[0]
+        qrc721Params.name = (await nameResult)[0]
       } catch (err) {}
       try {
-        contract.qrc721.symbol = (await symbolResult)[0]
+        qrc721Params.symbol = (await symbolResult)[0]
       } catch (err) {}
       try {
-        contract.qrc721.totalSupply = BigInt((await totalSupplyResult)[0].toString())
-      } catch (err) {
-        contract.type = ''
-        contract.tags = []
-        delete contract.qrc721
-      }
+        qrc721Params.totalSupply = BigInt((await totalSupplyResult)[0].toString())
+        contract.type = 'qrc721'
+        contract.tags = ['qrc721']
+        contract.qrc721 = qrc721Params
+      } catch (err) {}
     } else if (isQRC20(code)) {
-      contract.type = 'qrc20'
-      contract.tags = ['qrc20']
-      contract.qrc20 = {}
+      let qrc20Params = {}
       let [
         nameResult, symbolResult, decimalsResult, totalSupplyResult, versionResult
       ] = await this._batchCallMethods([
@@ -950,24 +945,23 @@ export default class ContractService extends Service {
         {address, abi: Solidity.qrc20ABIs.find(abi => abi.name === 'version')}
       ])
       try {
-        contract.qrc20.name = (await nameResult)[0]
+        qrc20Params.name = (await nameResult)[0]
       } catch (err) {}
       try {
-        contract.qrc20.symbol = (await symbolResult)[0]
+        qrc20Params.symbol = (await symbolResult)[0]
       } catch (err) {}
       try {
-        contract.qrc20.decimals = (await decimalsResult)[0].toNumber()
+        qrc20Params.decimals = (await decimalsResult)[0].toNumber()
       } catch (err) {}
       try {
-        contract.qrc20.version = (await versionResult)[0]
+        qrc20Params.version = (await versionResult)[0]
       } catch (err) {}
       try {
-        contract.qrc20.totalSupply = BigInt((await totalSupplyResult)[0].toString())
-      } catch (err) {
-        contract.type = ''
-        contract.tags = []
-        delete contract.qrc20
-      }
+        qrc20Params.totalSupply = BigInt((await totalSupplyResult)[0].toString())
+        contract.type = 'qrc20'
+        contract.tags = ['qrc20']
+        contract.qrc20 = qrc20Params
+      } catch (err) {}
     }
     return await contract.save()
   }
