@@ -26,7 +26,7 @@ export default class ContractsController {
     }
     let summary = await this.node.getContractSummary(contract.address)
     let qrc20TokenBalances = await this.node.getAllQRC20TokenBalances(
-      new Address({type: Address.CONTRACT, data: contract.address, chain: this.node.chain})
+      new Address({type: Address.EVM_CONTRACT, data: contract.address, chain: this.node.chain})
     )
     ctx.body = {
       address: contract.address.toString('hex'),

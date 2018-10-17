@@ -17,8 +17,8 @@ const types = {
   WITNESS_V0_KEYHASH: 'Pay to witness public key hash',
   WITNESS_V0_SCRIPTHASH: 'Pay to witness script hash',
   WITNESS_IN: 'Spend from witness',
-  CONTRACT_CREATE: 'Contract create',
-  CONTRACT_CALL: 'Contract call',
+  EVM_CONTRACT_CREATE: 'EVM Contract create',
+  EVM_CONTRACT_CALL: 'EVM Contract call',
   CONTRACT_SPEND: 'Spend from contract'
 }
 
@@ -30,8 +30,8 @@ const outputIdentifiers = {
   DATA_OUT: 'isDataOut',
   WITNESS_V0_KEYHASH: 'isWitnessKeyHashOut',
   WITNESS_V0_SCRIPTHASH: 'isWitnessScriptHashOut',
-  CONTRACT_CREATE: 'isContractCreate',
-  CONTRACT_CALL: 'isContractCall'
+  EVM_CONTRACT_CREATE: 'isEVMContractCreate',
+  EVM_CONTRACT_CALL: 'isEVMContractCall'
 }
 const inputIdentifiers = {
   PUBKEY_IN: 'isPublicKeyIn',
@@ -237,12 +237,16 @@ export default class Script {
       && this.chunks[0].buffer.length >= 2 && this.chunks[0].buffer.length <= 40
   }
 
-  isContractCreate() {
-    return this.chunks.length === 5 && this.chunks[4].code === Opcode.OP_CREATE
+  isEVMContractCreate() {
+    return this.chunks.length === 5
+      && this.chunks[0].buffer && this.chunks[0].buffer[0] === 4
+      && this.chunks[4].code === Opcode.OP_CREATE
   }
 
-  isContractCall() {
-    return this.chunks.length === 6 && this.chunks[5].code === Opcode.OP_CALL
+  isEVMContractCall() {
+    return this.chunks.length === 6
+      && this.chunks[0].buffer && this.chunks[0].buffer[0] === 4
+      && this.chunks[5].code === Opcode.OP_CALL
   }
 
   isContractSpend() {

@@ -31,6 +31,7 @@ const contractSchema = new mongoose.Schema({
     get: s => Buffer.from(s, 'hex'),
     set: x => x.toString('hex')
   },
+  vm: String,
   owner: addressSchema,
   createTransactionId: {
     type: String,

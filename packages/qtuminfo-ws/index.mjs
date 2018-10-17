@@ -221,7 +221,7 @@ export default class QtuminfoWebsocketService extends Service {
             asm: input.scriptSig.toString()
           }
         }
-        if (input.address && input.address.type === Address.CONTRACT) {
+        if (input.address && input.address.type === Address.EVM_CONTRACT) {
           if (transformedInput.address in invalidContracts) {
             transformedInput.isInvalidContract = invalidContracts[transformedInput.address]
           } else {
@@ -257,7 +257,7 @@ export default class QtuminfoWebsocketService extends Service {
         transformedOutput.spentTxId = output.spentTxId.toString('hex')
         transformedOutput.spentIndex = output.spentIndex
       }
-      if (address && [Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
+      if (address && [Address.EVM_CONTRACT_CREATE, Address.EVM_CONTRACT_CALL].includes(address.type)) {
         if (transformedOutput.address in invalidContracts) {
           if (invalidContracts[transformedOutput.address]) {
             transformedOutput.isInvalidContract = true

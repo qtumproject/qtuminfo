@@ -545,7 +545,7 @@ export default class BlockService extends Service {
                     new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data: from, chain: this.chain}).toString()
                   )
                   relatedAddresses.add(
-                    new Address({type: Address.CONTRACT, data: from, chain: this.chain}).toString()
+                    new Address({type: Address.EVM_CONTRACT, data: from, chain: this.chain}).toString()
                   )
                 }
                 if (Buffer.compare(to, Buffer.alloc(20)) !== 0) {
@@ -553,7 +553,7 @@ export default class BlockService extends Service {
                     new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data: to, chain: this.chain}).toString()
                   )
                   relatedAddresses.add(
-                    new Address({type: Address.CONTRACT, data: to, chain: this.chain}).toString()
+                    new Address({type: Address.EVM_CONTRACT, data: to, chain: this.chain}).toString()
                   )
                 }
               }

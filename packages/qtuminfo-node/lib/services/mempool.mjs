@@ -67,8 +67,8 @@ export default class MempoolService extends Service {
       let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
       if (address.type === Address.PAY_TO_PUBLIC_KEY) {
         address.type = Address.PAY_TO_PUBLIC_KEY_HASH
-      } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
-        address.type = Address.CONTRACT
+      } else if ([Address.EVM_CONTRACT_CREATE, Address.EVM_CONTRACT_CALL].includes(address.type)) {
+        address.type = Address.EVM_CONTRACT
       }
       return {
         output: {

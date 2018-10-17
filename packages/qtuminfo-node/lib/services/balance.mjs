@@ -29,9 +29,9 @@ export default class BalanceService extends Service {
         type: Address.PAY_TO_PUBLIC_KEY_HASH,
         hex: address.data.toString('hex')
       }
-    } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
+    } else if ([Address.EVM_CONTRACT_CREATE, Address.EVM_CONTRACT_CALL].includes(address.type)) {
       address = {
-        type: Address.CONTRACT,
+        type: Address.EVM_CONTRACT,
         hex: address.data.toString('hex')
       }
     } else {
@@ -78,7 +78,7 @@ export default class BalanceService extends Service {
           $match: {
             $and: [
               {address: {$ne: null}},
-              {'address.type': {$ne: Address.CONTRACT}}
+              {'address.type': {$ne: Address.EVM_CONTRACT}}
             ],
             value: {$ne: 0},
             'output.height': {$gt: 0, $lte: height},
@@ -149,7 +149,7 @@ export default class BalanceService extends Service {
       )
       await AddressInfo.insertMany(
         contracts.map(address => ({
-          address: {type: Address.CONTRACT, hex: address},
+          address: {type: Address.EVM_CONTRACT, hex: address},
           string: address.toString('hex'),
           balance: 0n,
           createHeight: 0
