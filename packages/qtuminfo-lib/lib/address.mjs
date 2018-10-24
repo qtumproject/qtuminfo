@@ -12,16 +12,17 @@ const types = {
   PAY_TO_SCRIPT_HASH: 'scripthash',
   PAY_TO_WITNESS_KEY_HASH: 'witness_v0_keyhash',
   PAY_TO_WITNESS_SCRIPT_HASH: 'witness_v0_scripthash',
-  EVM_CONTRACT_CREATE: 'evm-create',
-  EVM_CONTRACT_CALL: 'evm-call',
-  EVM_CONTRACT: 'evm-contract'
+  CONTRACT: 'contract',
+  CONTRACT_CREATE: 'create',
+  CONTRACT_CALL: 'call'
 }
 
 export default class Address {
-  constructor({type, data, chain}) {
+  constructor({type, data, chain, vm}) {
     this.type = type
     this.data = data
     this.chain = chain
+    this.vm = vm
   }
 
   get [Symbol.toStringTag]() {
@@ -63,15 +64,23 @@ export default class Address {
       })
     case Script.EVM_CONTRACT_CREATE:
       return new Address({
-        type: types.EVM_CONTRACT_CREATE,
+        type: types.CONTRACT_CREATE,
         data: Hash.sha256ripemd160(
           Buffer.concat([Buffer.from(transactionId).reverse(), getUInt32LEBuffer(outputIndex)])
         ),
-        chain
+        chain,
+        vm: 'evm'
       })
     case Script.EVM_CONTRACT_CALL:
       return new Address({
-        type: types.EVM_CONTRACT_CALL,
+        type: types.CONTRACT_CALL,
+        data: script.chunks[4].buffer,
+        chain,
+        vm: 'evm'
+      })
+    case Script.CONTRACT_OUT:
+      return new Address({
+        type: types.CONTRACT_CALL,
         data: script.chunks[4].buffer,
         chain
       })
@@ -81,9 +90,10 @@ export default class Address {
   static fromString(string, chain) {
     if (/^[0-9a-f]{40}$/.test(string)) {
       return new Address({
-        type: types.EVM_CONTRACT,
+        type: types.CONTRACT,
         data: Buffer.from(string, 'hex'),
-        chain
+        chain,
+        vm: 'evm'
       })
     }
     try {
@@ -142,9 +152,9 @@ export default class Address {
     case types.PAY_TO_WITNESS_KEY_HASH:
     case types.PAY_TO_WITNESS_SCRIPT_HASH:
       return SegwitAddress.encode(this.chain.witnesshrp, 0, this.data)
-    case types.EVM_CONTRACT:
-    case types.EVM_CONTRACT_CREATE:
-    case types.EVM_CONTRACT_CALL:
+    case types.CONTRACT:
+    case types.CONTRACT_CREATE:
+    case types.CONTRACT_CALL:
       return this.data.toString('hex')
     }
   }

@@ -144,7 +144,7 @@ export default class TransactionsController {
             asm: input.scriptSig.toString()
           }
         }
-        if (input.address && input.address.type === Address.EVM_CONTRACT) {
+        if (input.address && input.address.type === Address.CONTRACT) {
           if (transformedInput.address in invalidContracts) {
             if (invalidContracts[transformedInput.address]) {
               transformedInput.isInvalidContract = true
@@ -182,7 +182,7 @@ export default class TransactionsController {
         transformedOutput.spentTxId = output.spentTxId.toString('hex')
         transformedOutput.spentIndex = output.spentIndex
       }
-      if (address && [Address.EVM_CONTRACT_CREATE, Address.EVM_CONTRACT_CALL].includes(address.type)) {
+      if (address && [Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
         if (transformedOutput.address in invalidContracts) {
           transformedOutput.isInvalidContract = invalidContracts[transformedOutput.address]
         } else {

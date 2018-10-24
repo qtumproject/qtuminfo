@@ -70,7 +70,7 @@ export default class ContractService extends Service {
       {
         $match: {
           $or: [
-            {relatedAddresses: {type: Address.EVM_CONTRACT, hex: address}},
+            {relatedAddresses: {type: Address.CONTRACT, hex: address}},
             {'receipts.contractAddress': address},
             {
               'receipts.logs': {
@@ -124,7 +124,7 @@ export default class ContractService extends Service {
     address = address.toString('hex')
     let totalCount = await Transaction.countDocuments({
       $or: [
-        {relatedAddresses: {type: Address.EVM_CONTRACT, hex: address}},
+        {relatedAddresses: {type: Address.CONTRACT, hex: address}},
         {'receipts.contractAddress': address},
         {
           'receipts.logs': {
@@ -162,7 +162,7 @@ export default class ContractService extends Service {
     let [balanceChangesResult] = await QtumBalanceChanges.aggregate([
       {
         $match: {
-          address: {type: Address.EVM_CONTRACT, hex: address},
+          address: {type: Address.CONTRACT, hex: address},
           value: {$ne: 0}
         }
       },
@@ -302,7 +302,7 @@ export default class ContractService extends Service {
       addresses = [addresses]
     }
     let hexAddresses = addresses
-      .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.EVM_CONTRACT].includes(address.type))
+      .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.CONTRACT].includes(address.type))
       .map(address => '0'.repeat(24) + address.data.toString('hex'))
     addresses = addresses.map(address => address.data.toString('hex'))
     if (tokens !== 'all') {
@@ -613,7 +613,7 @@ export default class ContractService extends Service {
       addresses = [addresses]
     }
     let hexAddresses = addresses
-      .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.EVM_CONTRACT].includes(address.type))
+      .filter(address => [Address.PAY_TO_PUBLIC_KEY_HASH, Address.CONTRACT].includes(address.type))
       .map(address => address.data.toString('hex'))
     let list = await QRC20TokenBalance.aggregate([
       {$match: {address: {$in: hexAddresses}}},
@@ -1109,9 +1109,10 @@ export default class ContractService extends Service {
   async _fromHexAddress(string) {
     if (await Contract.collection.findOne({address: string}, {projection: {_id: true}})) {
       return new Address({
-        type: Address.EVM_CONTRACT,
+        type: Address.CONTRACT,
         data: Buffer.from(string, 'hex'),
-        chain: this.chain
+        chain: this.chain,
+        vm: 'evm'
       })
     } else {
       return new Address({

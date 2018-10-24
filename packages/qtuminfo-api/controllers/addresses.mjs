@@ -12,7 +12,7 @@ export default class AddressesController {
     let addresses = ctx.params.address.split(',')
     ctx.state.addresses = addresses.map(string => {
       let address = Address.fromString(string, this.node.chain)
-      if (!address || address.type === Address.EVM_CONTRACT) {
+      if (!address || address.type === Address.CONTRACT) {
         ctx.throw(400, `Invalid Address ${string}`)
       }
       return address

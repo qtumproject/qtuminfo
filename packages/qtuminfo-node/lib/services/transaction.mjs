@@ -607,8 +607,8 @@ export default class TransactionService extends Service {
       if (address) {
         if (address.type === Address.PAY_TO_PUBLIC_KEY) {
           address.type = Address.PAY_TO_PUBLIC_KEY_HASH
-        } else if ([Address.EVM_CONTRACT_CREATE, Address.EVM_CONTRACT_CALL].includes(address.type)) {
-          address.type = Address.EVM_CONTRACT
+        } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
+          address.type = Address.CONTRACT
         }
       }
       return {

@@ -93,7 +93,7 @@ export default class StatisticsService extends Service {
 
   async getAddressGrowth() {
     let result = await AddressInfo.aggregate([
-      {$match: {type: {$ne: Address.EVM_CONTRACT}}},
+      {$match: {type: {$ne: Address.CONTRACT}}},
       {
         $group: {
           _id: '$createHeight',

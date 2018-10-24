@@ -321,7 +321,7 @@ export default class HeaderService extends Service {
   }
 
   async _adjustHeadersForCheckpointTip() {
-    this.logger.info('Header Service: getiing last header synced at height:', this._tip.height)
+    this.logger.info('Header Service: getting last header synced at height:', this._tip.height)
     await Header.deleteMany({height: {$gt: this._tip.height}})
     this._lastHeader = await Header.findOne({height: this._tip.height})
     this._tip.height = this._lastHeader.height
