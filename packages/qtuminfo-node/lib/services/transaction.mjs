@@ -195,7 +195,6 @@ export default class TransactionService extends Service {
         $group: {
           _id: '$_id',
           id: {$first: '$id'},
-          hash: {$first: '$hash'},
           version: {$first: '$version'},
           marker: {$first: '$marker'},
           flag: {$first: '$flag'},
@@ -224,8 +223,6 @@ export default class TransactionService extends Service {
       {
         $group: {
           _id: '$_id',
-          id: {$first: '$id'},
-          hash: {$first: '$hash'},
           version: {$first: '$version'},
           marker: {$first: '$marker'},
           flag: {$first: '$flag'},
