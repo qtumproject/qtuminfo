@@ -72,6 +72,24 @@ export default class TransactionService extends Service {
         }
       },
       {$unwind: '$output'},
+      {
+        $lookup: {
+          from: 'transactionoutputs',
+          localField: 'output.refund',
+          foreignField: '_id',
+          as: 'refund'
+        }
+      },
+      {$addFields: {refund: {$arrayElemAt: ['$refund', 0]}}},
+      {
+        $lookup: {
+          from: 'transactionoutputs',
+          localField: 'output._id',
+          foreignField: 'refund',
+          as: 'refundTo'
+        }
+      },
+      {$addFields: {isRefund: {$toBool: {$size: '$refundTo'}}}},
       {$sort: {'output.index': 1}},
       {
         $group: {
@@ -88,7 +106,11 @@ export default class TransactionService extends Service {
               scriptPubKey: '$output.output.scriptPubKey',
               address: '$output.address',
               spentTxId: '$output.spent.transactionId',
-              spentIndex: '$output.spent.index'
+              spentIndex: '$output.spent.index',
+              refundTxId: '$refund.output.transactionId',
+              refundIndex: '$refund.output.index',
+              refundValue: '$refund.value',
+              isRefund: '$isRefund'
             }
           },
           witnesses: {$first: '$witnesses'},
@@ -140,6 +162,12 @@ export default class TransactionService extends Service {
           result.spentTxId = Buffer.from(output.spentTxId, 'hex')
           result.spentIndex = output.spentIndex
         }
+        if (output.refundTxId) {
+          result.refundTxId = Buffer.from(output.refundTxId, 'hex')
+          result.refundIndex = output.refundIndex
+          result.refundValue = toBigInt(output.refundValue)
+        }
+        result.isRefund = output.isRefund
         result.address = Address.fromScript(result.scriptPubKey, this.chain, Buffer.from(transaction.id, 'hex'), index)
         return result
       }),
@@ -283,21 +311,41 @@ export default class TransactionService extends Service {
     if (height === 0) {
       return 0n
     }
-    let [result] = await QtumBalanceChanges.aggregate([
-      {
-        $match: {
-          'block.height': height,
-          index: isProofOfStake ? 1 : 0
-        }
-      },
+    let transaction = await Transaction.collection.findOne(
+      {'block.height': height, index: isProofOfStake ? 1 : 0},
+      {projection: {_id: false, id: true}}
+    )
+    if (!transaction) {
+      return
+    }
+    let [{inputValue}] = await TransactionOutput.aggregate([
+      {$match: {'spent.transactionId': transaction.id}},
       {
         $group: {
           _id: null,
-          value: {$sum: '$value'}
+          inputValue: {$sum: '$value'}
         }
       }
     ])
-    return result && toBigInt(result.value)
+    let [{outputValue}] = await TransactionOutput.aggregate([
+      {$match: {'output.transactionId': transaction.id}},
+      {
+        $lookup: {
+          from: 'transactionoutputs',
+          localField: '_id',
+          foreignField: 'refund',
+          as: 'refundTo'
+        }
+      },
+      {$match: {refundTo: []}},
+      {
+        $group: {
+          _id: null,
+          outputValue: {$sum: '$value'}
+        }
+      }
+    ])
+    return toBigInt(outputValue) - toBigInt(inputValue)
   }
 
   async searchLogs({

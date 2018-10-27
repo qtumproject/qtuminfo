@@ -169,6 +169,14 @@ export default class QtuminfoWebsocketService extends Service {
     let confirmations = 'block' in transaction ? this.node.getBlockTip().height - transaction.block.height + 1 : 0
     let inputValue = transaction.inputs.map(input => input.value).reduce((x, y) => x + y)
     let outputValue = transaction.outputs.map(output => output.value).reduce((x, y) => x + y)
+    let refundValue = transaction.outputs
+      .map(output => output.refundValue)
+      .filter(Boolean)
+      .reduce((x, y) => x + y, 0n)
+    let refundToValue = transaction.outputs
+      .filter(output => output.isRefund)
+      .map(output => output.value)
+      .reduce((x, y) => x + y, 0n)
     let transformed = {
       id: transaction.id.toString('hex'),
       hash: transaction.hash.toString('hex'),
@@ -185,7 +193,8 @@ export default class QtuminfoWebsocketService extends Service {
       isCoinstake: Transaction.prototype.isCoinstake.call(transaction),
       inputValue: inputValue.toString(),
       outputValue: outputValue.toString(),
-      fees: (inputValue - outputValue).toString(),
+      refundValue: refundValue.toString(),
+      fees: (inputValue - outputValue - refundValue + refundToValue).toString(),
       size: transaction.size,
       receipts: transaction.receipts.map(({gasUsed, contractAddress, excepted, logs}) => ({
         gasUsed,
