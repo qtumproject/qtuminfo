@@ -40,7 +40,8 @@ const transactionOutputSchema = new mongoose.Schema({
     get: LongtoBigInt,
     set: BigInttoLong
   },
-  isStake: {type: Boolean, default: false, index: true}
+  isStake: {type: Boolean, default: false, index: true},
+  refund: {type: mongoose.Schema.Types.ObjectId, index: true}
 })
 
 

@@ -1018,6 +1018,13 @@ export default class ContractService extends Service {
         }
       })
     )
+    let refundTxos = await TransactionOutput.find(
+      {
+        'output.transactionId': block.transactions[block.header.isProofOfStake() ? 1 : 0].id,
+        address: {$exists: true}
+      },
+      '_id address value'
+    )
     let balanceChanges = new Set()
     let totalSupplyChanges = new Set()
     for (let index = 0; index < receiptIndices.length; ++index) {
@@ -1050,6 +1057,46 @@ export default class ContractService extends Service {
             if (topics[1] === '0'.repeat(64) || topics[2] === '0'.repeat(64)) {
               totalSupplyChanges.add(address)
             }
+          }
+        }
+      }
+      let indices = []
+      for (let i = 0; i < tx.outputs.length; ++i) {
+        if (tx.outputs[i].scriptPubKey.isEVMContractCreate() || tx.outputs[i].scriptPubKey.isEVMContractCall()) {
+          indices.push(i)
+        }
+      }
+      let sender = (await TransactionOutput.findOne({
+        'spent.transactionId': tx.id,
+        'spent.index': 0
+      }, '-_id address')).address
+      for (let i = 0; i < indices.length; ++i) {
+        let output = tx.outputs[indices[i]]
+        let {gasUsed, excepted} = blockReceipts[index][i]
+        if (excepted === 'Unknown') {
+          continue
+        }
+        let gasLimit = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[1].buffer, 'hex')
+          .reverse()
+          .toString('hex')
+        }`)
+        let gasPrice = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[2].buffer, 'hex')
+          .reverse()
+          .toString('hex')
+        }`)
+        let refundValue = gasPrice * (gasLimit - BigInt(gasUsed))
+        if (refundValue) {
+          let txoIndex = refundTxos.findIndex(
+            txo => txo.value === refundValue && txo.address.type === sender.type && Buffer.compare(txo.address.hex, sender.hex) === 0
+          )
+          if (txoIndex === -1) {
+            this.logger.error(`Contract Service: cannot find refund output: ${tx.id.toString('hex')}`)
+          } else {
+            await TransactionOutput.updateOne(
+              {'output.transactionId': tx.id, 'output.index': i},
+              {refund: refundTxos[txoIndex]._id}
+            )
+            refundTxos.splice(txoIndex, 1)
           }
         }
       }
