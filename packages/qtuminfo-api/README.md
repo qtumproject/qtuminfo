@@ -75,7 +75,7 @@ GET /block/100000
   "miner": "Qa28NkEgNuZ9evd8xQTnspv71ZGRzMaNTp",
   "coinstakeValue": "20000000000",
   "difficulty": 3976056.2203602516,
-  "reward": "432252878",
+  "reward": "409280918",
   "confirmations": 145624
 }
 ```
@@ -179,7 +179,8 @@ GET /tx/c4f906c845f7e4a9bc6cfbb1c581ac12325841d7ccac0c63067c84b3aaed38f7
   "isCoinstake": false,
   "inputValue": "18885917",
   "outputValue": "8642923",
-  "fees": "10242994",
+  "refundValue": "8518840",
+  "fees": "1724154",
   "size": 594,
   "receipts": [
     {
