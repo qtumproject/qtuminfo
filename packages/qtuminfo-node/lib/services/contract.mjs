@@ -587,10 +587,12 @@ export default class ContractService extends Service {
                 as: 'contract'
               }
             },
+            {$match: {'contract.type': 'qrc20'}},
+            {$unwind: '$contract'},
             {
               $project: {
-                address: {$arrayElemAt: ['$contract.address', 0]},
-                qrc20: {$arrayElemAt: ['$contract.qrc20', 0]},
+                address: '$contract.address',
+                qrc20: '$contract.qrc20',
                 holders: '$holders'
               }
             }
@@ -638,10 +640,12 @@ export default class ContractService extends Service {
           as: 'contract'
         }
       },
+      {$match: {'contract.type': 'qrc20'}},
+      {$unwind: '$contract'},
       {
         $project: {
-          address: {$arrayElemAt: ['$contract.address', 0]},
-          qrc20: {$arrayElemAt: ['$contract.qrc20', 0]},
+          address: '$contract.address',
+          qrc20: '$contract.qrc20',
           balances: '$balances'
         }
       }
