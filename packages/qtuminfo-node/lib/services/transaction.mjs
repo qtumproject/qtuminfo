@@ -1,4 +1,5 @@
 import {Address, Script, Input, Output, Transaction as RawTransaction} from 'qtuminfo-lib'
+import Block from '../models/block'
 import Transaction from '../models/transaction'
 import TransactionOutput from '../models/transaction-output'
 import QtumBalanceChanges from '../models/qtum-balance-changes'
@@ -707,6 +708,12 @@ export default class TransactionService extends Service {
       weight: tx.weight,
       relatedAddresses
     })
+
+    let contractTransactionList = await QtumBalanceChanges.distinct('id', {
+      'block.height': block.height,
+      'address.type': 'contract'
+    })
+    await Block.updateOne({height: block.height}, {contractTransactionCount: contractTransactionList.length})
   }
 
   async removeReplacedTransactions(tx) {

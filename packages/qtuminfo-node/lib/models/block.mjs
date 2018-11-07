@@ -29,6 +29,7 @@ const blockSchema = new mongoose.Schema({
     set: x => x.toString('hex')
   }],
   transactionCount: Number,
+  contractTransactionCount: Number,
   miner: {type: addressSchema, index: true},
   coinstakeValue: {
     type: mongoose.Schema.Types.Long,

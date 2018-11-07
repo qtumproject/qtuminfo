@@ -23,14 +23,24 @@ export default class StatisticsService extends Service {
       {
         $group: {
           _id: {$floor: {$divide: ['$timestamp', 86400]}},
-          count: {$sum: '$transactionCount'}
+          transactionCount: {
+            $sum: {
+              $cond: {
+                if: {$gt: ['$height', 5000]},
+                then: {$subtract: ['$transactionCount', 2]},
+                else: {$subtract: ['$transactionCount', 1]}
+              }
+            }
+          },
+          contractTransactionCount: {$sum: '$contractTransactionCount'}
         }
       },
       {
         $project: {
           _id: false,
           timestamp: '$_id',
-          count: '$count'
+          transactionCount: '$transactionCount',
+          contractTransactionCount: '$contractTransactionCount'
         }
       },
       {$sort: {timestamp: 1}}

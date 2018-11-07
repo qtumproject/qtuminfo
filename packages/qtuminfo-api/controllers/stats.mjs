@@ -10,9 +10,9 @@ export default class StatsContoller {
     if (!('dailyTransactions' in this._cache)) {
       this._cache.dailyTransactions = await this.node.getDailyTransactions()
     }
-    ctx.body = this._cache.dailyTransactions.map(({timestamp, count}) => ({
+    ctx.body = this._cache.dailyTransactions.map(({timestamp, transactionCount, contractTransactionCount}) => ({
       time: new Date(timestamp * 86400 * 1000),
-      transactions: count
+      transactionCount, contractTransactionCount
     }))
   }
 
