@@ -66,7 +66,7 @@ export default class TransactionsController {
   }
 
   async send(ctx) {
-    let data = ctx.request.body
+    let {rawtx: data} = ctx.request.body
     if (!/^([0-9a-f][0-9a-f])+$/.test(data)) {
       ctx.throw(400)
     }
