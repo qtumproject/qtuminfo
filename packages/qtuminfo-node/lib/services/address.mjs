@@ -73,6 +73,7 @@ export default class AddressService extends Service {
   }
 
   async _getAddressTransactionCount(addresses) {
+    addresses = parseAddresses(addresses)
     let hexAddresses = toHexAddresses(addresses)
     return await Transaction.countDocuments({
       $or: [
@@ -216,6 +217,7 @@ export default class AddressService extends Service {
         }
       }
     ])
+    let totalCount = await this._getAddressTransactionCount(addresses)
     if (!balanceChangesResult) {
       return {
         balance: 0n,
@@ -225,21 +227,20 @@ export default class AddressService extends Service {
         staking: 0n,
         mature: 0n,
         blocksStaked: 0,
-        totalCount: 0
+        totalCount
       }
     }
 
     let totalReceived = toBigInt(balanceChangesResult.totalReceived)
     let totalSent = toBigInt(balanceChangesResult.totalSent)
-    let [unconfirmed, staking, mature, blocksStaked, totalCount] = await Promise.all([
+    let [unconfirmed, staking, mature, blocksStaked] = await Promise.all([
       this._getUnconfirmedBalance(addresses),
       this._getStakingBalance(addresses),
       this.getMatureBalance(addresses),
       Block.countDocuments({
         height: {$gt: 5000},
         miner: {$in: addresses.filter(address => address.type === Address.PAY_TO_PUBLIC_KEY_HASH)}
-      }),
-      this._getAddressTransactionCount(addresses)
+      })
     ])
     return {
       balance: totalReceived - totalSent,
