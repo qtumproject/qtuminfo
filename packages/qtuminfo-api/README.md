@@ -23,11 +23,6 @@ API endpoint of [qtum.info](https://qtum.info) is https://qtum.info/api/
     - [QRC20 token list](#qrc20-token-list)
     - [Contract information](#contract-information)
     - [Contract transactions](#contract-transactions)
-    - [Contract rich list](#contract-rich-list)
-  - [Misc](#misc)
-    - [Blockchain status](#blockchain-status)
-    - [Rich list](#rich-list)
-    - [Biggest miners](#biggest-miners)
 
 
 ## Blocks
@@ -235,7 +230,7 @@ GET /raw-tx/c4f906c845f7e4a9bc6cfbb1c581ac12325841d7ccac0c63067c84b3aaed38f7
 POST /tx/send
 ```
 ```
-Request Body = { raw transaction data in hex string }
+Request Body = "rawtx=0200...."
 ```
 
 

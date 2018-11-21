@@ -5,7 +5,7 @@
 * mongodb v3.6+
 
 ## Deploy qtum core
-1. `git clone -b explorer/0.15.3 --recursive https://github.com/xuanyan0x7c7/qtum.git`
+1. `git clone --recursive https://github.com/xuanyan0x7c7/qtum.git`
 2. Follow the instructions [https://github.com/qtumproject/qtum#building-qtum-core]() to build qtum
 3. Run `qtumd` with `-logevents=1` enabled
 
