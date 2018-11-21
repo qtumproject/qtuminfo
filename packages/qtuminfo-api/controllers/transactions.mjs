@@ -70,8 +70,12 @@ export default class TransactionsController {
     if (!/^([0-9a-f][0-9a-f])+$/.test(data)) {
       ctx.throw(400)
     }
-    let id = await this.node.sendRawTransaction(Buffer.from(data, 'hex'))
-    ctx.body = id.toString('hex')
+    try {
+      let id = await this.node.sendRawTransaction(Buffer.from(data, 'hex'))
+      ctx.body = {status: 0, id: id.toString('hex')}
+    } catch (err) {
+      ctx.body = {status: 1, message: err.message}
+    }
   }
 
   async _transformTransaction(transaction, {brief = false} = {}) {
