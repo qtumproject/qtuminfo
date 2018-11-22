@@ -3,6 +3,7 @@ import LRU from 'lru-cache'
 import {Header as RawHeader, Block as RawBlock, Address, Solidity} from 'qtuminfo-lib'
 import Header from '../models/header'
 import Block from '../models/block'
+import QtumBalanceChanges from '../models/qtum-balance-changes'
 import TransactionOutput from '../models/transaction-output'
 import Service from './base'
 import {AsyncQueue, toBigInt} from '../utils'
@@ -618,6 +619,10 @@ export default class BlockService extends Service {
       }
       miner = {type: address.type, hex: address.data}
     }
+    let contractTransactionList = await QtumBalanceChanges.distinct('id', {
+      'block.height': header.height,
+      'address.type': 'contract'
+    })
     return await Block.create({
       hash: rawBlock.hash,
       height: header.height,
@@ -627,6 +632,7 @@ export default class BlockService extends Service {
       weight: rawBlock.weight,
       transactions: rawBlock.transactions.map(transaction => transaction.id),
       transactionCount: rawBlock.transactions.length,
+      contractTransactionCount: contractTransactionList.length,
       miner,
       ...coinstakeValue ? {coinstakeValue} : {}
     })
