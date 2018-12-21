@@ -233,15 +233,19 @@ export default class ContractService extends Service {
         let toString = topics[2].slice(12).toString('hex')
         let from
         let to
-        if (fromString in addressCache) {
-          from = addressCache[fromString]
-        } else {
-          addressCache[fromString] = from = await this._fromHexAddress(fromString)
+        if (fromString !== '0'.repeat(40)) {
+          if (fromString in addressCache) {
+            from = addressCache[fromString]
+          } else {
+            addressCache[fromString] = from = await this._fromHexAddress(fromString)
+          }
         }
-        if (toString in addressCache) {
-          to = addressCache[toString]
-        } else {
-          addressCache[toString] = to = await this._fromHexAddress(toString)
+        if (toString !== '0'.repeat(40)) {
+          if (toString in addressCache) {
+            to = addressCache[toString]
+          } else {
+            addressCache[toString] = to = await this._fromHexAddress(toString)
+          }
         }
         list.push({
           token,
@@ -277,15 +281,19 @@ export default class ContractService extends Service {
         let toString = topics[2].slice(12).toString('hex')
         let from
         let to
-        if (fromString in addressCache) {
-          from = addressCache[fromString]
-        } else {
-          addressCache[fromString] = from = await this._fromHexAddress(fromString)
+        if (fromString !== '0'.repeat(40)) {
+          if (fromString in addressCache) {
+            from = addressCache[fromString]
+          } else {
+            addressCache[fromString] = from = await this._fromHexAddress(fromString)
+          }
         }
-        if (toString in addressCache) {
-          to = addressCache[toString]
-        } else {
-          addressCache[toString] = to = await this._fromHexAddress(toString)
+        if (toString !== '0'.repeat(40)) {
+          if (toString in addressCache) {
+            to = addressCache[toString]
+          } else {
+            addressCache[toString] = to = await this._fromHexAddress(toString)
+          }
         }
         list.push({
           token,
