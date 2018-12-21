@@ -58,7 +58,7 @@ export default class QtuminfoWebsocketService extends Service {
   }
 
   getRemoteAddress(req) {
-    return req.headers['x-forwarded-for'] || req.socket.remoteAddress
+    return req.headers['x-real-ip'] || req.socket.remoteAddress
   }
 
   async _blockEventHandler(block) {

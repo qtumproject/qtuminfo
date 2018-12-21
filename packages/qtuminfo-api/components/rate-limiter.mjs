@@ -92,7 +92,7 @@ export default class RateLimiter {
   }
 
   static getClientName(ctx) {
-    return ctx.get('x-forwarded-for') || ctx.request.ip
+    return ctx.get('x-real-ip') || ctx.request.ip
   }
 
   addClient(name) {

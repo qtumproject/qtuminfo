@@ -72,7 +72,7 @@ export default class WebService extends Service {
   }
 
   static getRemoteAddress(socket) {
-    return socket.client.request.headers['x-forwarded-for'] || socket.conn.remoteAddress
+    return socket.client.request.headers['x-real-ip'] || socket.conn.remoteAddress
   }
 
   socketHandler(socket) {
