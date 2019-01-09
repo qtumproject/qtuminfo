@@ -241,13 +241,13 @@ export default class Script {
 
   isEVMContractCreate() {
     return this.chunks.length === 5
-      && this.chunks[0].buffer && this.chunks[0].buffer[0] === 4
+      && (this.chunks[0].code === Opcode.OP_4 || this.chunks[0].buffer && this.chunks[0].buffer[0] === 4)
       && this.chunks[4].code === Opcode.OP_CREATE
   }
 
   isEVMContractCall() {
     return this.chunks.length === 6
-      && this.chunks[0].buffer && this.chunks[0].buffer[0] === 4
+      && (this.chunks[0].code === Opcode.OP_4 || this.chunks[0].buffer && this.chunks[0].buffer[0] === 4)
       && this.chunks[5].code === Opcode.OP_CALL
   }
 
