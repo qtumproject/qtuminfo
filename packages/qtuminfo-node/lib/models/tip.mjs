@@ -1,9 +1,12 @@
-import mongoose from 'mongoose'
+import Sequelize from 'sequelize'
 
-const tipSchema = new mongoose.Schema({
-  service: {type: String, index: true, unique: true},
-  height: Number,
-  hash: Buffer
-})
-
-export default mongoose.model('Tip', tipSchema)
+export default function generate(sequelize) {
+  sequelize.define('tip', {
+    service: {
+      type: Sequelize.STRING,
+      primaryKey: true
+    },
+    height: Sequelize.INTEGER.UNSIGNED,
+    hash: Sequelize.CHAR(32).BINARY
+  }, {freezeTableName: true, underscored: true, timestamps: false})
+}

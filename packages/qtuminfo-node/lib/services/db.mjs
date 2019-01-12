@@ -1,41 +1,58 @@
 import fs from 'fs'
-import mongoose from 'mongoose'
-import {Header as RawHeader} from 'qtuminfo-lib'
+import Sequelize from 'sequelize'
+import {Header} from 'qtuminfo-lib'
 import Rpc from 'qtuminfo-rpc'
-import Tip from '../models/tip'
+import generateTip from '../models/tip'
+import generateHeader from '../models/header'
+import generateBlock from '../models/block'
+import generateAddress from '../models/address'
+import generateTransaction from '../models/transaction'
+import generateTransactionReceipt from '../models/transaction-receipt'
+import generateTransactionOutput from '../models/transaction-output'
+import generateContractTransaction from '../models/contract-transaction'
+import generateBalanceChange from '../models/balance-change'
 import Service from './base'
 
 export default class DbService extends Service {
   constructor(options) {
     super(options)
-    this._genesisHash = RawHeader.fromBuffer(this.chain.genesis).hash
-    this._rpcClient = new Rpc(Object.assign({
+    this._genesisHash = Header.fromBuffer(this.chain.genesis).hash
+    this._rpcOptions = Object.assign({
       protocol: 'http',
       host: 'localhost',
       port: 3889,
       user: 'user',
       password: 'password'
-    }, options.rpc))
+    }, options.rpc)
     this.node.on('stopping', () => {
       this.logger.warn('DB Service: node is stopping, gently closing the database. Please wait, this could take a while')
     })
-    mongoose.chain = this.chain
   }
 
   get APIMethods() {
     return {
       getRpcClient: this.getRpcClient.bind(this),
+      getDatabase: this.getDatabase.bind(this),
+      getModel: this.getModel.bind(this),
       getServiceTip: this.getServiceTip.bind(this),
       updateServiceTip: this.updateServiceTip.bind(this)
     }
   }
 
   getRpcClient() {
-    return this._rpcClient
+    return new Rpc(this._rpcOptions)
+  }
+
+  getDatabase() {
+    return this._sequelize
+  }
+
+  getModel(name) {
+    return this._sequelize.models[name]
   }
 
   async getServiceTip(serviceName) {
-    let tip = await Tip.findOne({service: serviceName})
+    let tip = await this.Tip.findByPk(serviceName)
     if (tip) {
       return {height: tip.height, hash: tip.hash}
     } else {
@@ -44,32 +61,39 @@ export default class DbService extends Service {
   }
 
   async updateServiceTip(serviceName, tip) {
-    await Tip.updateOne(
-      {service: serviceName},
-      {height: tip.height, hash: tip.hash},
-      {upsert: true}
-    )
+    await this.Tip.upsert({service: serviceName, height: tip.height, hash: tip.hash})
   }
 
   async start() {
-    this._connection = await mongoose.connect(
-      this.options.mongodb.url + this.options.mongodb.database,
-      {
-        poolSize: 20,
-        useNewUrlParser: true
-      }
-    )
     try {
       await fs.promises.access(this.node.datadir)
     } catch (err) {
       await fs.promises.mkdir(this.node.datadir)
     }
+    this._sequelize = new Sequelize(this.options.mysql.uri, {
+      databaseVersion: 1,
+      dialectOptions: {
+        supportBigNumbers: true,
+        bigNumberStrings: true
+      },
+      logging: false
+    })
+    generateTip(this._sequelize)
+    generateHeader(this._sequelize)
+    generateBlock(this._sequelize)
+    generateAddress(this._sequelize)
+    generateTransaction(this._sequelize)
+    generateTransactionReceipt(this._sequelize)
+    generateTransactionOutput(this._sequelize)
+    generateContractTransaction(this._sequelize)
+    generateBalanceChange(this._sequelize)
+    this.Tip = this._sequelize.models.tip
   }
 
   async stop() {
-    if (this._connection) {
-      await mongoose.disconnect()
-      this._connection = null
+    if (this._sequelize) {
+      this._sequelize.close()
+      this._sequelize = null
     }
   }
 }

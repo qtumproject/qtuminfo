@@ -13,7 +13,7 @@ export default class Output {
 
   static fromBufferReader(reader) {
     let value = reader.readUInt64LE()
-    let scriptPubKey = Script.fromBuffer(reader.readVarLengthBuffer())
+    let scriptPubKey = Script.fromBuffer(reader.readVarLengthBuffer(), {isOutput: true})
     return new Output({scriptPubKey, value})
   }
 

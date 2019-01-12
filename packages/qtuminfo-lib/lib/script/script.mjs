@@ -5,6 +5,7 @@ import Opcode from './opcode'
 
 const types = {
   UNKNOWN: 'Unknown',
+  COINBASE: 'Coinbase',
   PUBKEY_OUT: 'Pay to public key',
   PUBKEY_IN: 'Spend from public key',
   PUBKEYHASH_OUT: 'Pay to public key hash',
@@ -17,8 +18,8 @@ const types = {
   WITNESS_V0_KEYHASH: 'Pay to witness public key hash',
   WITNESS_V0_SCRIPTHASH: 'Pay to witness script hash',
   WITNESS_IN: 'Spend from witness',
-  EVM_CONTRACT_CREATE: 'EVM Contract create',
-  EVM_CONTRACT_CALL: 'EVM Contract call',
+  EVM_CONTRACT_CREATE: 'EVM contract create',
+  EVM_CONTRACT_CALL: 'EVM contract call',
   CONTRACT_OUT: 'Pay to contract',
   CONTRACT_SPEND: 'Spend from contract'
 }
@@ -36,6 +37,7 @@ const outputIdentifiers = {
   CONTRACT_OUT: 'isContractOut'
 }
 const inputIdentifiers = {
+  COINBASE: 'isCoinbase',
   PUBKEY_IN: 'isPublicKeyIn',
   PUBKEYHASH_IN: 'isPublicKeyHashIn',
   MULTISIG_IN: 'isMultisigIn',
@@ -56,17 +58,23 @@ export class InvalidScriptError extends Error {
 }
 
 export default class Script {
-  constructor(chunks) {
+  constructor(chunks, {isOutput = false, isInput = false, isCoinbase = false}) {
     this.chunks = chunks
+    this._isOutput = isOutput
+    this._isInput = isInput
+    this._isCoinbase = isCoinbase
   }
 
-  static fromBuffer(buffer) {
+  static fromBuffer(buffer, {isOutput = false, isInput = false, isCoinbase = false}) {
+    if (isCoinbase) {
+      return new Script([{buffer}], {isInput: true, isCoinbase: true})
+    }
     if (buffer[0] === Opcode.OP_RETURN) {
       let data = buffer.slice(1)
       return new Script([
         {code: Opcode.OP_RETURN},
         ...data.length ? [{buffer: data}] : []
-      ])
+      ], {isOutput: true})
     }
     let reader = new BufferReader(buffer)
     let chunks = []
@@ -92,7 +100,7 @@ export default class Script {
         chunks.push({code})
       }
     }
-    return new Script(chunks)
+    return new Script(chunks, {isOutput, isInput})
   }
 
   toBuffer() {
@@ -102,6 +110,10 @@ export default class Script {
   }
 
   toBufferWriter(writer) {
+    if (this._isCoinbase) {
+      writer.write(this.chunks[0].buffer)
+      return
+    }
     if (this.isDataOut()) {
       writer.writeUInt8(Opcode.OP_RETURN)
       if (this.chunks.length === 2) {
@@ -157,6 +169,10 @@ export default class Script {
 
   [util.inspect.custom]() {
     return `<Script ${this.toString()}>`
+  }
+
+  isCoinbase() {
+    return this._isCoinbase
   }
 
   isPublicKeyOut() {
@@ -270,10 +286,8 @@ export default class Script {
     } else if (this._isInput) {
       return this._classifyOutput()
     } else {
-      let outputType = this._classifyOutput()
-      this._type = outputType === types.UNKNOWN ? this._classifyInput() : outputType
+      return types.UNKNOWN
     }
-    return this._type
   }
 
   _classifyOutput() {

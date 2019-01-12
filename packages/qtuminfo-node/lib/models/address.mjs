@@ -1,13 +1,23 @@
-import mongoose from 'mongoose'
+import Sequelize from 'sequelize'
 
-const addressSchema = new mongoose.Schema({
-  type: {type: String},
-  hex: {
-    type: String,
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex'),
-    alias: 'data'
-  }
-}, {_id: false})
-
-export default addressSchema
+export default function generate(sequelize) {
+  sequelize.define('address', {
+    _id: {
+      type: Sequelize.BIGINT.UNSIGNED,
+      field: '_id',
+      primaryKey: true,
+      autoIncrement: true
+    },
+    type: {
+      type: Sequelize.ENUM,
+      values: ['pubkeyhash', 'scripthash', 'witness_v0_keyhash', 'witness_v0_scripthash', 'contract'],
+      unique: 'address'
+    },
+    data: {
+      type: Sequelize.STRING(32).BINARY,
+      unique: 'address'
+    },
+    string: Sequelize.STRING(64),
+    createHeight: Sequelize.INTEGER.UNSIGNED
+  }, {freezeTableName: true, underscored: true, timestamps: false})
+}

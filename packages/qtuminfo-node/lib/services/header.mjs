@@ -1,11 +1,11 @@
 import assert from 'assert'
-import {Header as RawHeader} from 'qtuminfo-lib'
-import Header from '../models/header'
+import Sequelize from 'sequelize'
+import {Header} from 'qtuminfo-lib'
 import Service from './base'
 import {AsyncQueue} from '../utils'
 
 const MAX_CHAINWORK = 1n << 256n
-const STARTING_CHAINWORK = 0x10001n
+const STARTING_CHAINWORK = 0x100010001n
 
 export default class HeaderService extends Service {
   constructor(options) {
@@ -15,7 +15,7 @@ export default class HeaderService extends Service {
     this._hashes = []
     this.subscriptions = {block: []}
     this._checkpoint = options.checkpoint || 2000
-    this._genesisHeader = RawHeader.fromBuffer(this.chain.genesis)
+    this._genesisHeader = Header.fromBuffer(this.chain.genesis)
     this._lastHeader = null
     this._initialSync = true
     this._originalHeight = 0
@@ -27,25 +27,15 @@ export default class HeaderService extends Service {
   }
 
   get APIMethods() {
-    return {
-      getBestHeight: this.getBestHeight.bind(this),
-      getBlockHeader: this.getBlockHeader.bind(this)
-    }
+    return {getBestHeight: this.getBestHeight.bind(this)}
   }
 
   getBestHeight() {
     return this._tip.height
   }
 
-  async getBlockHeader(arg) {
-    if (typeof arg === 'number') {
-      return await Header.findOne({height: arg})
-    } else {
-      return await Header.findOne({hash: arg})
-    }
-  }
-
   async start() {
+    this.Header = this.node.getModel('header')
     this._tip = await this.node.getServiceTip(this.name)
     this._adjustTipBackToCheckpoint()
     if (this._tip.height === 0) {
@@ -72,8 +62,8 @@ export default class HeaderService extends Service {
       Buffer.compare(this._tip.hash, this._genesisHeader.hash) === 0,
       'Expected tip hash to be genesis hash, but it was not'
     )
-    await Header.deleteMany()
-    this._lastHeader = await Header.create({
+    await this.Header.destroy({truncate: true})
+    this._lastHeader = await this.Header.create({
       hash: this._genesisHeader.hash,
       height: 0,
       ...this._genesisHeader,
@@ -109,7 +99,7 @@ export default class HeaderService extends Service {
       return
     }
     try {
-      let header = await this.getBlockHeader(block.hash)
+      let header = await this.Header.findByHash(block.hash)
       if (header) {
         this.logger.debug('Header Service: block already exists in data set')
       } else {
@@ -133,7 +123,7 @@ export default class HeaderService extends Service {
 
   async _syncBlock(block) {
     this.logger.debug('Header Service: new block:', block.hash.toString('hex'))
-    let header = new Header({hash: block.header.hash, ...block.header})
+    let header = new this.Header({hash: block.header.hash, ...block.header})
     this._onHeader(header)
     await header.save()
     await this.node.updateServiceTip(this.name, this._tip)
@@ -148,7 +138,6 @@ export default class HeaderService extends Service {
   _onHeader(header) {
     header.height = this._lastHeader.height + 1
     header.chainwork = this._getChainwork(header, this._lastHeader)
-    header.interval = header.timestamp - this._lastHeader.timestamp
     this._lastHeader = header
     this._tip.height = header.height
     this._tip.hash = header.hash
@@ -161,7 +150,20 @@ export default class HeaderService extends Service {
         this._onHeadersSave().catch(err => this._handleError(err))
       } else {
         this.logger.debug('Header Service: received:', headers.length, 'header(s)')
-        let transformedHeaders = headers.map(header => new Header({hash: header.hash, ...header}))
+        let transformedHeaders = headers.map(header => ({
+          hash: header.hash,
+          version: header.version,
+          prevHash: header.prevHash,
+          merkleRoot: header.merkleRoot,
+          timestamp: header.timestamp,
+          bits: header.bits,
+          nonce: header.nonce,
+          hashStateRoot: header.hashStateRoot,
+          hashUTXORoot: header.hashUTXORoot,
+          stakePrevTxId: header.stakePrevTxId,
+          stakeOutputIndex: header.stakeOutputIndex,
+          signature: header.signature
+        }))
         for (let header of transformedHeaders) {
           assert(
             Buffer.compare(this._lastHeader.hash, header.prevHash) === 0,
@@ -170,7 +172,7 @@ export default class HeaderService extends Service {
           )
           this._onHeader(header)
         }
-        await Header.insertMany(transformedHeaders, {ordered: false})
+        await this.Header.bulkCreate(transformedHeaders)
       }
       await this.node.updateServiceTip(this.name, this._tip)
       await this._onHeadersSave()
@@ -304,13 +306,10 @@ export default class HeaderService extends Service {
       throw new Error('Header Service: block service is mis-aligned')
     }
     let startingHeight = tip.height + 1
-    let results = await Header.collection
-      .find(
-        {height: {$gte: startingHeight, $lte: startingHeight + blockCount}},
-        {projection: {_id: false, hash: true}}
-      )
-      .map(document => Buffer.from(document.hash, 'hex'))
-      .toArray()
+    let results = (await this.Header.findAll({
+      where: {height: {[Sequelize.Op.between]: [startingHeight, startingHeight + blockCount]}},
+      attributes: ['hash']
+    })).map(header => header.hash)
     let index = numResultsNeeded - 1
     let endHash = index <= 0 || !results[index] ? 0 : results[index]
     return {targetHash: results[0], endHash}
@@ -322,8 +321,8 @@ export default class HeaderService extends Service {
 
   async _adjustHeadersForCheckpointTip() {
     this.logger.info('Header Service: getting last header synced at height:', this._tip.height)
-    await Header.deleteMany({height: {$gt: this._tip.height}})
-    this._lastHeader = await Header.findOne({height: this._tip.height})
+    await this.Header.destroy({where: {height: {[Sequelize.Op.gt]: this._tip.height}}})
+    this._lastHeader = await this.Header.findByHeight(this._tip.height)
     this._tip.height = this._lastHeader.height
     this._tip.hash = this._lastHeader.hash
   }

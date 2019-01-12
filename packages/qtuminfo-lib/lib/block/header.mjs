@@ -6,7 +6,7 @@ const GENESIS_BITS = 0x1d00ffff
 export default class Header {
   constructor({
     version, prevHash, merkleRoot, timestamp, bits, nonce,
-    hashStateRoot, hashUTXORoot, prevOutStakeHash, prevOutStakeN, signature
+    hashStateRoot, hashUTXORoot, stakePrevTxId, stakeOutputIndex, signature
   }) {
     this.version = version
     this.prevHash = prevHash || Buffer.alloc(32)
@@ -16,8 +16,8 @@ export default class Header {
     this.nonce = nonce
     this.hashStateRoot = hashStateRoot
     this.hashUTXORoot = hashUTXORoot
-    this.prevOutStakeHash = prevOutStakeHash
-    this.prevOutStakeN = prevOutStakeN
+    this.stakePrevTxId = stakePrevTxId
+    this.stakeOutputIndex = stakeOutputIndex
     this.signature = signature
   }
 
@@ -34,12 +34,12 @@ export default class Header {
     let nonce = reader.readUInt32LE()
     let hashStateRoot = Buffer.from(reader.read(32)).reverse()
     let hashUTXORoot = Buffer.from(reader.read(32)).reverse()
-    let prevOutStakeHash = Buffer.from(reader.read(32)).reverse()
-    let prevOutStakeN = reader.readUInt32LE()
+    let stakePrevTxId = Buffer.from(reader.read(32)).reverse()
+    let stakeOutputIndex = reader.readUInt32LE()
     let signature = reader.readVarLengthBuffer()
     return new Header({
       version, prevHash, merkleRoot, timestamp, bits, nonce,
-      hashStateRoot, hashUTXORoot, prevOutStakeHash, prevOutStakeN, signature
+      hashStateRoot, hashUTXORoot, stakePrevTxId, stakeOutputIndex, signature
     })
   }
 
@@ -58,8 +58,8 @@ export default class Header {
     writer.writeUInt32LE(this.nonce)
     writer.write(Buffer.from(this.hashStateRoot).reverse())
     writer.write(Buffer.from(this.hashUTXORoot).reverse())
-    writer.write(Buffer.from(this.prevOutStakeHash).reverse())
-    writer.writeUInt32LE(this.prevOutStakeN)
+    writer.write(Buffer.from(this.stakePrevTxId).reverse())
+    writer.writeUInt32LE(this.stakeOutputIndex)
     writer.writeVarLengthBuffer(this.signature)
   }
 
@@ -85,15 +85,15 @@ export default class Header {
         nonce: this.nonce,
         hashStateRoot: this.hashStateRoot.toString('hex'),
         hashUTXORoot: this.hashUTXORoot.toString('hex'),
-        prevOutStakeHash: this.prevOutStakeHash.toString('hex'),
-        prevOutStakeN: this.prevOutStakeN,
+        stakePrevTxId: this.stakePrevTxId.toString('hex'),
+        stakeOutputIndex: this.stakeOutputIndex,
         signature: this.signature.toString('hex')
       }, null, 2)}`
     }
   }
 
   isProofOfStake() {
-    return Buffer.compare(this.prevOutStakeHash, Buffer.alloc(32)) !== 0 && this.prevOutStakeN !== 0xffffffff
+    return Buffer.compare(this.stakePrevTxId, Buffer.alloc(32)) !== 0 && this.stakeOutputIndex !== 0xffffffff
   }
 
   get difficulty() {

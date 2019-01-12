@@ -1,14 +1,9 @@
 import assert from 'assert'
 import LRU from 'lru-cache'
-import {Header as RawHeader, Block as RawBlock, Address, Solidity} from 'qtuminfo-lib'
-import Header from '../models/header'
-import Block from '../models/block'
-import QtumBalanceChanges from '../models/qtum-balance-changes'
-import TransactionOutput from '../models/transaction-output'
+import Sequelize from 'sequelize'
+import {Block} from 'qtuminfo-lib'
 import Service from './base'
-import {AsyncQueue, toBigInt} from '../utils'
-
-const TransferABI = Solidity.qrc20ABIs.find(abi => abi.name === 'Transfer')
+import {AsyncQueue} from '../utils'
 
 export default class BlockService extends Service {
   constructor(options) {
@@ -34,11 +29,6 @@ export default class BlockService extends Service {
   get APIMethods() {
     return {
       getBlockTip: this.getTip.bind(this),
-      getBlock: this.getBlock.bind(this),
-      getRawBlock: this.getRawBlock.bind(this),
-      getBlocksByTimestamp: this.getBlocksByTimestamp.bind(this),
-      getRecentBlocks: this.getRecentBlocks.bind(this),
-      syncPercentage: this.syncPercentage.bind(this),
       isSynced: this.isSynced.bind(this)
     }
   }
@@ -51,194 +41,9 @@ export default class BlockService extends Service {
     return this._tip
   }
 
-  async getBlock(arg) {
-    let filter = Number.isInteger(arg) ? {height: arg} : {hash: arg.toString('hex')}
-    let [block] = await Block.aggregate([
-      {$match: filter},
-      {
-        $lookup: {
-          from: 'headers',
-          localField: 'hash',
-          foreignField: 'hash',
-          as: 'header'
-        }
-      },
-      {$addFields: {header: {$arrayElemAt: ['$header', 0]}}}
-    ])
-    if (!block) {
-      return null
-    }
-    let result = {
-      hash: Buffer.from(block.hash, 'hex'),
-      height: block.height,
-      version: block.header.version,
-      prevHash: Buffer.from(block.prevHash, 'hex'),
-      merkleRoot: block.header.merkleRoot.buffer,
-      timestamp: block.timestamp,
-      bits: block.header.bits,
-      nonce: block.header.nonce,
-      hashStateRoot: block.header.hashStateRoot.buffer,
-      hashUTXORoot: block.header.hashUTXORoot.buffer,
-      prevOutStakeHash: block.header.prevOutStakeHash.buffer,
-      prevOutStakeN: block.header.prevOutStakeN,
-      signature: block.header.signature.buffer,
-      chainwork: BigInt(`0x${block.header.chainwork.toString('hex')}`),
-      size: block.size,
-      weight: block.weight,
-      transactions: block.transactions.map(id => Buffer.from(id, 'hex')),
-      miner: new Address({
-        type: block.miner.type,
-        data: Buffer.from(block.miner.hex, 'hex'),
-        chain: this.chain
-      }),
-      coinstakeValue: block.coinstakeValue && toBigInt(block.coinstakeValue),
-      interval: block.header.interval,
-      isProofOfStake: RawHeader.prototype.isProofOfStake.call({
-        prevOutStakeHash: block.header.prevOutStakeHash.buffer,
-        prevOutStakeN: block.header.prevOutStakeN
-      }),
-      difficulty: new RawHeader({bits: block.header.bits}).difficulty
-    }
-    let nextBlock = await Header.collection.findOne(
-      {height: block.height + 1},
-      {projection: {_id: false, hash: true}}
-    )
-    result.nextHash = nextBlock && Buffer.from(nextBlock.hash, 'hex')
-    return result
-  }
-
-  async getRawBlock(hash) {
-    let [block] = await Block.aggregate([
-      {$match: {hash: hash.toString('hex')}},
-      {
-        $lookup: {
-          from: 'headers',
-          localField: 'hash',
-          foreignField: 'hash',
-          as: 'header'
-        }
-      },
-      {$addFields: {header: {$arrayElemAt: ['$header', 0]}}}
-    ])
-    if (!block) {
-      return null
-    }
-    let transactions = []
-    for (let txid of block.transactions) {
-      transactions.push(await this.node.getRawTransaction(Buffer.from(txid, 'hex')))
-    }
-    return new RawBlock({
-      header: new RawHeader({
-        hash: Buffer.from(block.hash, 'hex'),
-        height: block.height,
-        version: block.header.version,
-        prevHash: Buffer.from(block.prevHash, 'hex'),
-        merkleRoot: block.header.merkleRoot.buffer,
-        timestamp: block.header.timestamp,
-        bits: block.header.bits,
-        nonce: block.header.nonce,
-        hashStateRoot: block.header.hashStateRoot.buffer,
-        hashUTXORoot: block.header.hashUTXORoot.buffer,
-        prevOutStakeHash: block.header.prevOutStakeHash.buffer,
-        prevOutStakeN: block.header.prevOutStakeN,
-        signature: block.header.signature.buffer
-      }),
-      transactions
-    })
-  }
-
-  async getBlocksByTimestamp({min, max}) {
-    let blocks = await Block.aggregate([
-      {$match: {timestamp: {$gte: min, $lt: max}}},
-      {$sort: {height: -1}},
-      {
-        $lookup: {
-          from: 'headers',
-          localField: 'hash',
-          foreignField: 'hash',
-          as: 'header'
-        }
-      },
-      {
-        $project: {
-          _id: false,
-          hash: '$hash',
-          height: '$height',
-          timestamp: '$timestamp',
-          transactionCount: '$transactionCount',
-          size: '$size',
-          miner: '$miner',
-          prevOutStakeHash: {$arrayElemAt: ['$header.prevOutStakeHash', 0]},
-          prevOutStakeN: {$arrayElemAt: ['$header.prevOutStakeN', 0]}
-        }
-      }
-    ])
-    return blocks.map(block => ({
-      hash: Buffer.from(block.hash, 'hex'),
-      height: block.height,
-      timestamp: block.timestamp,
-      transactionCount: block.transactionCount,
-      size: block.size,
-      miner: new Address({
-        type: block.miner.type,
-        data: Buffer.from(block.miner.hex, 'hex'),
-        chain: this.chain
-      }),
-      isProofOfStake: RawHeader.prototype.isProofOfStake.call({
-        prevOutStakeHash: block.prevOutStakeHash.buffer,
-        prevOutStakeN: block.prevOutStakeN
-      })
-    }))
-  }
-
-  async getRecentBlocks(limit = 10) {
-    let blocks = await Block.aggregate([
-      {$sort: {height: -1}},
-      {$limit: limit},
-      {
-        $lookup: {
-          from: 'headers',
-          localField: 'hash',
-          foreignField: 'hash',
-          as: 'header'
-        }
-      },
-      {
-        $project: {
-          hash: '$hash',
-          height: '$height',
-          timestamp: '$timestamp',
-          transactionCount: '$transactionCount',
-          interval: {$arrayElemAt: ['$header.interval', 0]},
-          size: '$size',
-          miner: '$miner',
-          prevOutStakeHash: {$arrayElemAt: ['$header.prevOutStakeHash', 0]},
-          prevOutStakeN: {$arrayElemAt: ['$header.prevOutStakeN', 0]}
-        }
-      }
-    ])
-    return blocks.map(block => ({
-      hash: Buffer.from(block.hash, 'hex'),
-      height: block.height,
-      timestamp: block.timestamp,
-      transactionCount: block.transactionCount,
-      interval: block.interval,
-      size: block.size,
-      miner: new Address({
-        type: block.miner.type,
-        data: Buffer.from(block.miner.hex, 'hex'),
-        chain: this.chain
-      }),
-      isProofOfStake: RawHeader.prototype.isProofOfStake.call({
-        prevOutStakeHash: block.prevOutStakeHash.buffer,
-        prevOutStakeN: block.prevOutStakeN
-      })
-    }))
-  }
-
   async _checkTip() {
     this.logger.info('Block Service: checking the saved tip...')
-    let header = await this.node.getBlockHeader(this._tip.height) || this._header.getLastHeader()
+    let header = await this.Header.findByHeight(this._tip.height) || this._header.getLastHeader()
     if (Buffer.compare(header.hash, this._tip.hash) === 0 && !this._reorgToBlock) {
       this.logger.info('Block Service: saved tip is good to go')
     }
@@ -255,13 +60,13 @@ export default class BlockService extends Service {
     this.logger.info('Block Service: retrieved all the headers of lookups')
     let block
     do {
-      block = await Block.findOne({hash: hash.toString('hex')}, '-_id hash', {lean: true})
+      block = await this.Block.findOne({where: {hashString: hash.toString('hex')}, attributes: ['hashString']})
       if (block) {
-        hash = Buffer.from(block.hash, 'hex')
+        hash = block.hash
       } else {
         this.logger.debug('Block Service: block:', hash.toString('hex'), 'was not found, proceeding to older blocks')
       }
-      let header = await Block.findOne({height: --height}, '-_id hash')
+      let header = await this.Block.findOne({where: {height: --height}, attributes: ['hashString']})
       assert(header, 'Header not found for reset')
       if (!block) {
         this.logger.debug('Block Service: trying block:', header.hash.toString('hex'))
@@ -271,8 +76,10 @@ export default class BlockService extends Service {
   }
 
   async start() {
+    this.Header = this.node.getModel('header')
+    this.Block = this.node.getModel('block')
     let tip = await this.node.getServiceTip('block')
-    if (tip.height > 0 && !await Block.findOne({hash: tip.hash.toString('hex')}, '_id', {lean: true})) {
+    if (tip.height > 0 && !await this.Block.findOne({where: {height: tip.height}, attributes: ['height']})) {
       tip = null
     }
     this._blockProcessor = new AsyncQueue(this._onBlock.bind(this))
@@ -281,7 +88,7 @@ export default class BlockService extends Service {
       this._tipResetNeeded = true
       return
     }
-    await Block.deleteMany({height: {$gt: tip.height}})
+    await this.Block.destroy({where: {height: {[Sequelize.Op.gt]: tip.height}}})
     this._header.on('reorg', () => {this._reorging = true})
     this._header.on('reorg complete', () => {this._reorging = false})
     await this._setTip(tip)
@@ -289,22 +96,33 @@ export default class BlockService extends Service {
   }
 
   async _loadRecentBlockHashes() {
-    let hashes = await Block.collection
-      .find(
-        {height: {$gte: this._tip.height - this._recentBlockHashesCount, $lte: this._tip.height}},
-        {projection: {_id: false, hash: true}}
-      )
-      .map(document => document.hash)
-      .toArray()
+    let hashes = (await this.Block.findAll({
+      where: {
+        height: {
+          [Sequelize.Op.between]: [
+            this._tip.height - this._recentBlockHashesCount,
+            this._tip.height
+          ]
+        }
+      },
+      attributes: ['hashString'],
+      order: [['height', 'ASC']]
+    })).map(block => block.hash)
     for (let i = 0; i < hashes.length - 1; ++i) {
-      this._recentBlockHashes.set(hashes[i + 1], Buffer.from(hashes[i], 'hex'))
+      this._recentBlockHashes.set(hashes[i + 1].toString('hex'), hashes[i])
     }
     this.logger.info('Block Service: loaded:', this._recentBlockHashes.length, 'hashes from the index')
   }
 
   async _getTimeSinceLastBlock() {
-    let header = await Block.findOne({height: Math.max(this._tip.height - 1, 0)}, '-_id timestamp', {lean: true})
-    let tip = await Block.findOne({hash: this._tip.hash.toString('hex')}, '-_id timestamp', {lean: true})
+    let header = await this.Header.findOne({
+      where: {height: Math.max(this._tip.height - 1, 0)},
+      attributes: ['timestamp']
+    })
+    let tip = await this.Header.findOne({
+      where: {height: this._tip.height},
+      attributes: ['timestamp']
+    })
     return convertSecondsToHumanReadable(tip.timestamp - header.timestamp)
   }
 
@@ -320,19 +138,13 @@ export default class BlockService extends Service {
     })
   }
 
-  syncPercentage() {
-    let height = this._header.getLastHeader().height
-    let ratio = this._tip.height / height
-    return (ratio * 100).toFixed(2)
-  }
-
   async onReorg(height) {
-    await Block.deleteMany({height: {$gt: height}})
+    await this.Block.destroy({where: {height: {[Sequelize.Op.gt]: height}}})
   }
 
   async _onReorg(blocks) {
     let targetHeight = blocks[blocks.length - 1].height - 1
-    let {hash: targetHash} = await Block.findOne({height: targetHeight}, '-_id hash')
+    let {hash: targetHash} = await this.Header.findByHeight(targetHeight, {attributes: ['hash']})
     try {
       for (let service of this.node.getServicesByOrder().reverse()) {
         this.logger.info('Block Service: reorging', service.name, 'service')
@@ -403,7 +215,7 @@ export default class BlockService extends Service {
 
   async _findLatestValidBlockHeader() {
     if (this._reorgToBlock) {
-      let header = await this.node.getBlockHeader(this._reorgToBlock)
+      let header = await this.Header.findByHeight(this._reorgToBlock, {attributes: ['hash', 'height']})
       assert(header, 'Block Service: header not found to reorg to')
       return header
     }
@@ -411,7 +223,7 @@ export default class BlockService extends Service {
     let blockServiceHeight = this._tip.height
     let header
     for (let i = 0; i <= this._recentBlockHashes.length; ++i) {
-      let currentHeader = await this.node.getBlockHeader(blockServiceHash)
+      let currentHeader = await this.Header.findByHash(blockServiceHash, {attributes: ['hash', 'height']})
       let hash = blockServiceHash
       let height = blockServiceHeight--
       blockServiceHash = this._recentBlockHashes.get(hash.toString('hex'))
@@ -441,9 +253,17 @@ export default class BlockService extends Service {
     let hash = this._tip.hash
     let blocks = []
     for (let i = 0; i < this._recentBlockHashes.length && Buffer.compare(hash, commonHeader.hash) !== 0; ++i) {
-      let block = await Block.findOne({hash}, '-_id hash height prevHash')
-      blocks.push(block)
-      hash = block.prevHash
+      let {header} = await this.Block.findOne({
+        where: {hashString: hash.toString('hex')},
+        attributes: [],
+        include: [{
+          model: this.Header,
+          required: true,
+          attributes: ['hash', 'height', 'prevHash']
+        }]
+      })
+      blocks.push(header)
+      hash = header.prevHash
     }
     return blocks
   }
@@ -485,11 +305,14 @@ export default class BlockService extends Service {
     }
     this._processingBlock = true
     try {
-      if (await Block.findOne({hash: rawBlock.hash}, '_id', {lean: true})) {
+      if (await this.Block.findOne({
+        where: {hashString: rawBlock.hash.toString('hex')},
+        attributes: ['height']
+      })) {
         this._processingBlock = false
         this.logger.debug('Block Service: not syncing, block already in database')
       } else {
-        return await this._processBlock(rawBlock)
+        await this._processBlock(rawBlock)
       }
     } catch (err) {
       this._processingBlock = false
@@ -518,52 +341,12 @@ export default class BlockService extends Service {
       for (let service of this.node.getServicesByOrder()) {
         await service.onBlock(rawBlock)
       }
-      let block = await this.__onBlock(rawBlock)
+      await this.__onBlock(rawBlock)
       this._recentBlockHashes.set(rawBlock.hash.toString('hex'), rawBlock.header.prevHash)
       await this._setTip({hash: rawBlock.hash, height: rawBlock.height})
       this._processingBlock = false
       for (let subscription of this.subscriptions.block) {
         subscription.emit('block/block', rawBlock)
-      }
-      for (let id of block.transactions) {
-        this.node.getTransaction(id).then(transaction => {
-          let relatedAddresses = new Set()
-          for (let subscription of this.subscriptions.transaction) {
-            subscription.emit('block/transaction', transaction)
-          }
-          for (let {address} of transaction.balanceChanges) {
-            if (address) {
-              relatedAddresses.add(address.toString())
-            }
-          }
-          for (let receipt of transaction.receipts) {
-            for (let log of receipt.logs) {
-              if (log.topics.length >= 3 && Buffer.compare(log.topics[0], TransferABI.id) === 0) {
-                let from = log.topics[1].slice(12)
-                let to = log.topics[2].slice(12)
-                if (Buffer.compare(from, Buffer.alloc(20)) !== 0) {
-                  relatedAddresses.add(
-                    new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data: from, chain: this.chain}).toString()
-                  )
-                  relatedAddresses.add(
-                    new Address({type: Address.CONTRACT, data: from, chain: this.chain, vm: 'evm'}).toString()
-                  )
-                }
-                if (Buffer.compare(to, Buffer.alloc(20)) !== 0) {
-                  relatedAddresses.add(
-                    new Address({type: Address.PAY_TO_PUBLIC_KEY_HASH, data: to, chain: this.chain}).toString()
-                  )
-                  relatedAddresses.add(
-                    new Address({type: Address.CONTRACT, data: to, chain: this.chain, vm: 'evm'}).toString()
-                  )
-                }
-              }
-            }
-          }
-          for (let subscription of this.subscriptions.address) {
-            subscription.emit('block/address', 'transaction', transaction, [...relatedAddresses])
-          }
-        })
       }
     } catch (err) {
       this._processingBlock = false
@@ -600,41 +383,13 @@ export default class BlockService extends Service {
   async __onBlock(rawBlock) {
     let header
     do {
-      header = await Header.findOne({hash: rawBlock.hash}, '-_id height')
+      header = await this.Header.findByHash(rawBlock.hash, {attributes: ['height']})
     } while (!header)
-    let miner
-    let coinstakeValue
-    if (rawBlock.header.isProofOfStake()) {
-      let kernel = rawBlock.transactions[1].inputs[0]
-      let txo = await TransactionOutput.findOne({
-        'output.transactionId': kernel.prevTxId.toString('hex'),
-        'output.index': kernel.outputIndex
-      }, '-_id address value')
-      miner = {type: Address.PAY_TO_PUBLIC_KEY_HASH, data: txo.address.data}
-      coinstakeValue = txo.value
-    } else {
-      let address = Address.fromScript(rawBlock.transactions[0].outputs[0].scriptPubKey, this.chain)
-      if (address.type === Address.PAY_TO_PUBLIC_KEY) {
-        address.type = Address.PAY_TO_PUBLIC_KEY_HASH
-      }
-      miner = {type: address.type, hex: address.data}
-    }
-    let contractTransactionList = await QtumBalanceChanges.distinct('id', {
-      'block.height': header.height,
-      'address.type': 'contract'
-    })
-    return await Block.create({
+    return await this.Block.create({
       hash: rawBlock.hash,
       height: header.height,
-      prevHash: rawBlock.header.prevHash,
-      timestamp: rawBlock.header.timestamp,
       size: rawBlock.size,
-      weight: rawBlock.weight,
-      transactions: rawBlock.transactions.map(transaction => transaction.id),
-      transactionCount: rawBlock.transactions.length,
-      contractTransactionCount: contractTransactionList.length,
-      miner,
-      ...coinstakeValue ? {coinstakeValue} : {}
+      weight: rawBlock.weight
     })
   }
 
@@ -682,7 +437,7 @@ export default class BlockService extends Service {
       this.on('synced', this._onSynced.bind(this))
       clearInterval(this._reportInterval)
       if (this._tip.height === 0) {
-        let genesisBlock = RawBlock.fromBuffer(this.chain.genesis)
+        let genesisBlock = Block.fromBuffer(this.chain.genesis)
         genesisBlock.height = 0
         await this._saveBlock(genesisBlock)
       }

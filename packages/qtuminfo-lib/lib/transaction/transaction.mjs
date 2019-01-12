@@ -28,6 +28,10 @@ export default class Transaction {
     return this.toBuffer().length
   }
 
+  get weight() {
+    return this.toBuffer().length * 3 + this.toHashBuffer().length
+  }
+
   static fromBuffer(buffer) {
     return Transaction.fromBufferReader(new BufferReader(buffer))
   }

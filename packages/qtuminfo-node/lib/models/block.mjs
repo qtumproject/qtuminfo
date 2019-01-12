@@ -1,41 +1,32 @@
-import mongoose from 'mongoose'
-import mongooseLong from 'mongoose-long'
-import addressSchema from './address'
-import {BigInttoLong, LongtoBigInt} from '../utils'
+import Sequelize from 'sequelize'
 
-mongooseLong(mongoose)
+export default function generate(sequelize) {
+  let Block = sequelize.define('block', {
+    hashString: {
+      type: Sequelize.CHAR(64),
+      unique: true
+    },
+    height: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      primaryKey: true
+    },
+    size: Sequelize.INTEGER.UNSIGNED,
+    weight: Sequelize.INTEGER.UNSIGNED
+    // miner
+  }, {
+    freezeTableName: true, underscored: true, timestamps: false,
+    getterMethods: {
+      hash() {
+        return Buffer.from(this.hashString, 'hex')
+      }
+    },
+    setterMethods: {
+      hash(value) {
+        this.setDataValue('hashString', value.toString('hex'))
+      }
+    }
+  }, {freezeTableName: true, underscored: true, timestamps: false})
 
-const blockSchema = new mongoose.Schema({
-  hash: {
-    type: String,
-    index: true,
-    unique: true,
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex')
-  },
-  height: {type: Number, index: true, unique: true},
-  prevHash: {
-    type: String,
-    default: '0'.repeat(64),
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex')
-  },
-  timestamp: Number,
-  size: Number,
-  weight: Number,
-  transactions: [{
-    type: String,
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex')
-  }],
-  transactionCount: Number,
-  contractTransactionCount: Number,
-  miner: {type: addressSchema, index: true},
-  coinstakeValue: {
-    type: mongoose.Schema.Types.Long,
-    get: LongtoBigInt,
-    set: BigInttoLong
-  }
-})
-
-export default mongoose.model('Block', blockSchema)
+  sequelize.models.header.hasOne(Block, {foreignKey: 'height'})
+  Block.belongsTo(sequelize.models.header, {foreignKey: 'height'})
+}
