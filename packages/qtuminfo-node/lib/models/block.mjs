@@ -11,8 +11,8 @@ export default function generate(sequelize) {
       primaryKey: true
     },
     size: Sequelize.INTEGER.UNSIGNED,
-    weight: Sequelize.INTEGER.UNSIGNED
-    // miner
+    weight: Sequelize.INTEGER.UNSIGNED,
+    minerId: Sequelize.BIGINT.UNSIGNED
   }, {
     freezeTableName: true, underscored: true, timestamps: false,
     getterMethods: {
@@ -29,4 +29,6 @@ export default function generate(sequelize) {
 
   sequelize.models.header.hasOne(Block, {foreignKey: 'height'})
   Block.belongsTo(sequelize.models.header, {foreignKey: 'height'})
+  Block.hasOne(sequelize.models.address, {as: 'miner', foreignKey: 'minerId'})
+  sequelize.models.address.hasOne(Block, {as: 'minedBlocks', foreignKey: 'minerId'})
 }

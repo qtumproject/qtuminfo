@@ -78,6 +78,8 @@ export default class BlockService extends Service {
   async start() {
     this.Header = this.node.getModel('header')
     this.Block = this.node.getModel('block')
+    this.Transaction = this.node.getModel('transaction')
+    this.TransactionOutput = this.node.getModel('transaction_output')
     let tip = await this.node.getServiceTip('block')
     if (tip.height > 0 && !await this.Block.findOne({where: {height: tip.height}, attributes: ['height']})) {
       tip = null
@@ -385,11 +387,38 @@ export default class BlockService extends Service {
     do {
       header = await this.Header.findByHash(rawBlock.hash, {attributes: ['height']})
     } while (!header)
+    let minerId
+    if (header.height > 5000) {
+      minerId = (await this.TransactionOutput.findOne({
+        where: {inputIndex: 0},
+        attributes: ['addressId'],
+        include: [{
+          model: this.Transaction,
+          as: 'inputTransaction',
+          required: true,
+          where: {blockHeight: header.height, indexInBlock: 1},
+          attributes: []
+        }]
+      })).addressId
+    } else {
+      minerId = (await this.TransactionOutput.findOne({
+        where: {outputIndex: 0},
+        attributes: ['addressId'],
+        include: [{
+          model: this.Transaction,
+          as: 'outputTransaction',
+          required: true,
+          where: {blockHeight: header.height, indexInBlock: 0},
+          attributes: []
+        }]
+      })).addressId
+    }
     return await this.Block.create({
       hash: rawBlock.hash,
       height: header.height,
       size: rawBlock.size,
-      weight: rawBlock.weight
+      weight: rawBlock.weight,
+      minerId
     })
   }
 

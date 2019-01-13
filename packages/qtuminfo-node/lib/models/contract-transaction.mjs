@@ -32,8 +32,8 @@ export default function generate(sequelize) {
 
   sequelize.models.transaction.hasMany(GasRefund, {as: 'refunds', foreignKey: 'transactionId', sourceKey: 'id'})
   GasRefund.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId', targetKey: 'id'})
-  sequelize.models.output.hasOne(GasRefund, {as: 'utxo', foreignKey: 'refundTxId', sourceKey: 'transactionId'})
-  GasRefund.belongsTo(sequelize.models.output, {as: 'refund', foreignKey: 'refundTxId', targetKey: 'transactionId'})
+  sequelize.models.transaction_output.hasOne(GasRefund, {as: 'refund', foreignKey: 'refundTxId', sourceKey: 'outputTxId'})
+  GasRefund.belongsTo(sequelize.models.transaction_output, {as: 'refundTo', foreignKey: 'refundTxId', targetKey: 'outputTxId'})
   sequelize.models.transaction.hasOne(ContractSpend, {as: 'contractSpendSource', foreignKey: 'sourceTxId', sourceKey: 'id'})
   ContractSpend.belongsTo(sequelize.models.transaction, {as: 'sourceTransaction', foreignKey: 'sourceTxId', targetKey: 'id'})
   sequelize.models.transaction.hasMany(ContractSpend, {as: 'contractSpendDests', foreignKey: 'destTxId', sourceKey: 'id'})

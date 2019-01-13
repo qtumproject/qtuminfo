@@ -17,8 +17,7 @@ export default class TransactionService extends Service {
     this.Address = this.node.getModel('address')
     this.Transaction = this.node.getModel('transaction')
     this.Witness = this.node.getModel('witness')
-    this.Output = this.node.getModel('output')
-    this.Input = this.node.getModel('input')
+    this.TransactionOutput = this.node.getModel('transaction_output')
     this.BalanceChange = this.node.getModel('balance_change')
     this.GasRefund = this.node.getModel('gas_refund')
     this.ContractSpend = this.node.getModel('contract_spend')
@@ -30,25 +29,27 @@ export default class TransactionService extends Service {
     if (this._tip.height > blockTip.height) {
       this._tip = {height: blockTip.height, hash: blockTip.hash}
     }
+    await this.TransactionOutput.destroy({
+      where: {
+        outputTxId: null,
+        inputHeight: {[Sequelize.Op.gt]: this._tip.height}
+      }
+    })
+    await this.TransactionOutput.update(
+      {inputTxId: null, inputIndex: null, scriptSig: null, sequence: null, inputHeight: null},
+      {where: {inputHeight: {[Sequelize.Op.gt]: this._tip.height}}}
+    )
     await this.db.query(`
-      UPDATE transaction tx, output, input
-      SET output.spent = false
-      WHERE
-        input.prev_transaction_id = output.transaction_id AND input.output_index = output.output_index
-        AND tx.id = input.transaction_id AND tx.block_height > ${this._tip.height}
-    `)
-    await this.db.query(`
-      DELETE tx, witness, output, input, receipt, log, topic, refund, contract_spend, balance
+      DELETE tx, witness, txo, receipt, log, topic, refund, contract_spend, balance
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
-      LEFT JOIN output ON output.transaction_id = tx.id
-      LEFT JOIN input ON input.transaction_id = tx.id
+      LEFT JOIN transaction_output txo ON txo.output_transaction_id = tx.id
       LEFT JOIN receipt ON receipt.transaction_id = tx.id
       LEFT JOIN receipt_log log ON log.receipt_id = receipt._id
       LEFT JOIN receipt_topic topic ON topic.log_id = log._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
-      LEFT JOIN balance_change balance ON balance.transaction_id = tx.id
+      LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.block_height > ${this._tip.height}
     `)
     await this.Address.destroy({where: {createHeight: {[Sequelize.Op.gt]: this._tip.height}}})
@@ -57,11 +58,10 @@ export default class TransactionService extends Service {
 
   async onReorg(height) {
     await this.db.query(`
-      UPDATE transaction tx, output, input
-      SET output.spent = false
-      WHERE
-        input.prev_transaction_id = output.transaction_id AND input.output_index = output.output_index
-        AND tx.id = input.transaction_id AND tx.block_height > ${Math.max(height, 5001)} AND tx.index_in_block = 1
+      UPDATE transaction tx, transaction_output txo
+      SET txo.input_transaction_id = NULL, txo.input_index = NULL,
+        txo.scriptsig = NULL, txo.sequence = NULL, txo.input_height = NULL
+      WHERE tx.id = input.transaction_id AND tx.block_height > ${Math.max(height, 5000)} AND tx.index_in_block = 1
     `)
     await this.db.query(`
       DELETE receipt, log, topic, refund, contract_spend
@@ -71,15 +71,14 @@ export default class TransactionService extends Service {
       LEFT JOIN receipt_topic topic ON topic.log_id = log._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
-      WHERE tx.block_height between ${height + 1} AND 0xfffffffe
+      WHERE tx.block_height > ${height}
     `)
     await this.db.query(`
-      DELETE tx, witness, output, input, balance
+      DELETE tx, witness, txo, balance
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
-      LEFT JOIN output ON output.transaction_id = tx.id
-      LEFT JOIN input ON input.transaction_id = tx.id
-      LEFT JOIN balance_change balance ON balance.transaction_id = tx.id
+      LEFT JOIN transaction_output txo ON txo.output_transaction_id = tx.id OR txo.input_transaction_id = tx.id
+      LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.block_height > ${height} AND tx.index_in_block < 2
         AND (tx.index_in_block = 0 OR tx.block_height > 5000)
     `)
@@ -111,15 +110,21 @@ export default class TransactionService extends Service {
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
         if (index > 0) {
-          let mempoolTx = await this.Transaction.findOne({where: {id: tx.id}, attributes: ['_id']})
-          if (mempoolTx) {
-            mempoolTx.blockHeight = block.height
-            mempoolTx.indexInBlock = index
-            await mempoolTx.save()
+          if (await this.Transaction.update(
+            {blockHeight: block.height, indexInBlock: index},
+            {where: {id: tx.id}}
+          )[0]) {
+            await this.TransactionOutput.update(
+              {outputHeight: block.height},
+              {where: {outputTxId: tx.id}}
+            )
+            await this.TransactionOutput.update(
+              {inputHeight: block.height},
+              {where: {inputTxId: tx.id}}
+            )
             continue
-          } else {
-            await this.removeReplacedTransactions(tx)
           }
+          await this.removeReplacedTransactions(tx)
         }
         newTransactions.push(tx)
         txs.push({
@@ -249,16 +254,16 @@ export default class TransactionService extends Service {
       for (let outputIndex = 0; outputIndex < tx.outputs.length; ++outputIndex) {
         let output = tx.outputs[outputIndex]
         outputTxos.push({
-          transactionId: tx.id,
+          outputTxId: tx.id,
           outputIndex,
           scriptPubKey: output.scriptPubKey.toBuffer(),
+          outputHeight: block.height,
           value: output.value,
-          addressId: addressIds[index][outputIndex],
-          spent: false
+          addressId: addressIds[index][outputIndex]
         })
       }
     }
-    await this.Output.bulkCreate(outputTxos, {validate: false})
+    await this.TransactionOutput.bulkCreate(outputTxos, {validate: false})
   }
 
   async _processInputs(transactions, block) {
@@ -267,60 +272,60 @@ export default class TransactionService extends Service {
       for (let index = 0; index < tx.inputs.length; ++index) {
         let input = tx.inputs[index]
         inputTxos.push({
-          transactionId: tx.id,
+          ...input.scriptSig.isCoinbase() ? {} : {
+            outputTxId: input.prevTxId,
+            outputIndex: input.outputIndex
+          },
+          inputTxId: tx.id,
           inputIndex: index,
-          prevTxId: input.prevTxId,
-          outputIndex: input.outputIndex,
           scriptSig: input.scriptSig.toBuffer(),
-          sequence: input.sequence
+          sequence: input.sequence,
+          inputHeight: block.height,
+          value: 0n,
+          addressId: '0'
         })
       }
     }
-    await this.Input.bulkCreate(inputTxos, {validate: false})
-    await this.db.query(`
-      UPDATE output, input, transaction tx
-      SET output.spent = true
-      WHERE output.transaction_id = input.prev_transaction_id AND input.transaction_id = tx.id
-        AND tx.block_height = ${block.height}
-    `)
+    await this.TransactionOutput.bulkCreate(inputTxos, {
+      updateOnDuplicate: ['inputTxId', 'inputIndex', 'scriptSig', 'sequence', 'inputHeight'],
+      validate: false
+    })
   }
 
   async _processBalanceChanges({block, transactions}) {
-    let filter
+    let filters
     if (block) {
-      filter = `block_height = ${block.height}`
+      filters = [
+        `output_height = ${block.height}`,
+        `input_height = ${block.height}`
+      ]
     } else {
       if (transactions.length === 0) {
         return
       }
-      let ids = transactions.map(tx => `0x${tx.id.toString('hex')}`)
-      filter = `id IN (${ids.join(', ')})`
+      let ids = transactions.map(tx => `0x${tx.id.toString('hex')}`).join(', ')
+      filters = [
+        `output_transaction_id IN (${ids})`,
+        `input_transaction_id IN (${ids})`
+      ]
     }
     await this.db.query(`
       INSERT INTO balance_change (transaction_id, address_id, value)
       SELECT
-        block_balance.transaction_id AS transaction_id,
+        tx._id AS transaction_id,
         block_balance.address_id AS address_id,
         SUM(block_balance.value) AS value
       FROM (
-        SELECT
-          tx.id AS transaction_id,
-          output.address_id AS address_id,
-          output.value AS value
-        FROM output
-        LEFT JOIN transaction tx ON tx.id = output.transaction_id
-        WHERE tx.${filter}
+        SELECT output_transaction_id AS transaction_id, address_id, value
+        FROM transaction_output
+        WHERE ${filters[0]}
         UNION ALL
-        SELECT
-          tx.id AS transaction_id,
-          output.address_id AS address_id,
-          -output.value AS value
-        FROM output
-        LEFT JOIN input ON input.prev_transaction_id = output.transaction_id AND input.output_index = output.output_index
-        LEFT JOIN transaction AS tx ON tx.id = input.transaction_id
-        WHERE tx.${filter}
+        SELECT input_transaction_id AS transaction_id, address_id, -value AS value
+        FROM transaction_output
+        WHERE ${filters[1]}
       ) AS block_balance
-      GROUP BY block_balance.transaction_id, block_balance.address_id
+      LEFT JOIN transaction tx ON tx.id = block_balance.transaction_id
+      GROUP BY tx._id, block_balance.address_id
     `)
   }
 
@@ -359,29 +364,20 @@ export default class TransactionService extends Service {
         }
       })
     )
-    let refundTxos = await this.Output.findAll({
+    let refundTxos = await this.TransactionOutput.findAll({
       where: {
-        transactionId: block.transactions[block.header.isProofOfStake() ? 1 : 0].id,
+        outputTxId: block.transactions[block.header.isProofOfStake() ? 1 : 0].id,
         outputIndex: {[Sequelize.Op.gt]: 0}
       },
       attributes: ['outputIndex', 'value', 'addressId']
     })
-    let senderMap = new Map((await this.Input.findAll({
+    let senderMap = new Map((await this.TransactionOutput.findAll({
       where: {
-        transactionId: {[Sequelize.Op.in]: receiptIndices.map(index => block.transactions[index].id)},
+        inputTxId: {[Sequelize.Op.in]: receiptIndices.map(index => block.transactions[index].id)},
         inputIndex: 0
       },
-      attributes: ['transactionId'],
-      include: [{
-        model: this.Output,
-        as: 'source',
-        on: {
-          prevTxId: this.db.where(this.db.col('source.transaction_id'), '=', this.db.col('input.prev_transaction_id')),
-          outputIndex: this.db.where(this.db.col('source.output_index'), '=', this.db.col('input.output_index'))
-        },
-        attributes: ['addressId']
-      }]
-    })).map(item => [item.transactionId.toString('hex'), item.source.addressId]))
+      attributes: ['inputTxId', 'addressId']
+    })).map(item => [item.inputTxId.toString('hex'), item.addressId]))
     let receiptIndex = -1
     let logIndex = -1
     for (let index = 0; index < receiptIndices.length; ++index) {
@@ -434,7 +430,8 @@ export default class TransactionService extends Service {
           receiptLogs.push({
             receiptId: receiptIndex,
             logIndex: j,
-            contractAddress: Buffer.from(address, 'hex'),
+            address: Buffer.from(address, 'hex'),
+            topicsCount: topics.length,
             data: Buffer.from(data, 'hex')
           })
           ++logIndex
@@ -461,8 +458,8 @@ export default class TransactionService extends Service {
   async removeReplacedTransactions(tx) {
     let inputTxos = tx.inputs.map(input => `(0x${input.prevTxId.toString('hex')}, ${input.outputIndex})`)
     let transactionsToRemove = (await this.db.query(`
-      SELECT DISTINCT(transaction_id) AS transactionId FROM input
-      WHERE (prev_transaction_id, output_index) IN (${inputTxos.join(', ')})
+      SELECT DISTINCT(input_transaction_id) AS transactionId FROM transaction_output
+      WHERE (output_transaction_id, output_index) IN (${inputTxos.join(', ')})
     `, {type: this.db.QueryTypes.SELECT})).map(tx => tx.transactionId)
     for (let id of transactionsToRemove) {
       await this._removeMempoolTransaction(id)
@@ -470,27 +467,23 @@ export default class TransactionService extends Service {
   }
 
   async _removeMempoolTransaction(id) {
-    await this.db.query(`
-      UPDATE transaction tx, output, input
-      SET output.spent = false
-      WHERE
-        input.prev_transaction_id = output.transaction_id AND input.output_index = output.output_index
-        AND input.transaction_id = 0x${id.toString('hex')}
-    `)
-    let transactionsToRemove = (await this.Input.findAll({
-      where: {prevTxId: id},
-      attributes: ['transactionId']
-    })).map(tx => tx.transactionId)
+    let transactionsToRemove = (await this.TransactionOutput.findAll({
+      where: {outputTxId: id},
+      attributes: ['inputTxId']
+    })).map(tx => tx.inputTxId)
     for (let id of transactionsToRemove) {
       await this._removeMempoolTransaction(id)
     }
+    await this.TransactionOutput.update(
+      {inputTxId: null, inputIndex: null, scriptSig: null, sequence: null, inputHeight: null},
+      {where: {inputTxId: id}}
+    )
     await this.db.query(`
-      DELETE tx, witness, output, input, balance
+      DELETE tx, witness, txo, input, balance
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
-      LEFT JOIN output ON output.transaction_id = tx.id
-      LEFT JOIN input ON input.transaction_id = tx.id
-      LEFT JOIN balance_change balance ON balance.transaction_id = tx.id
+      LEFT JOIN transaction_output txo ON txo.output_transaction_id = tx.id
+      LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.id = 0x${id.toString('hex')}
     `)
   }

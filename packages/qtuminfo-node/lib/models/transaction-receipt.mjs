@@ -37,19 +37,20 @@ export default function generate(sequelize) {
     },
     receiptId: Sequelize.BIGINT.UNSIGNED,
     logIndex: Sequelize.INTEGER.UNSIGNED,
-    contractAddress: Sequelize.CHAR(20).BINARY,
+    address: Sequelize.CHAR(20).BINARY,
+    topicsCount: Sequelize.INTEGER.UNSIGNED,
     data: Sequelize.BLOB
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
   let ReceiptTopic = sequelize.define('receipt_topic', {
-    _id: {
+    logId: {
       type: Sequelize.BIGINT.UNSIGNED,
-      field: '_id',
-      primaryKey: true,
-      autoIncrement: true
+      primaryKey: true
     },
-    logId: Sequelize.BIGINT.UNSIGNED,
-    topicIndex: Sequelize.INTEGER.UNSIGNED,
+    topicIndex: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      primaryKey: true
+    },
     topic: Sequelize.BLOB
   }, {freezeTableName: true, underscored: true, timestamps: false})
 

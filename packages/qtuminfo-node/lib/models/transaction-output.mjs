@@ -1,50 +1,69 @@
 import Sequelize from 'sequelize'
 
 export default function generate(sequelize) {
-  let Output = sequelize.define('output', {
-    transactionId: {
-      type: Sequelize.CHAR(32).BINARY,
+  let TransactionOutput = sequelize.define('transaction_output', {
+    _id: {
+      type: Sequelize.BIGINT.UNSIGNED,
+      field: '_id',
+      primaryKey: true
+    },
+    outputTxId: {
+      type: Sequelize.STRING(32).BINARY,
+      field: 'output_transaction_id',
       primaryKey: true
     },
     outputIndex: {
       type: Sequelize.INTEGER.UNSIGNED,
       primaryKey: true
     },
-    scriptPubKey: {type: Sequelize.BLOB, field: 'scriptpubkey'},
+    scriptPubKey: {
+      type: Sequelize.BLOB,
+      field: 'scriptpubkey',
+      allowNull: true
+    },
+    outputHeight: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      allowNull: true
+    },
+    inputTxId: {
+      type: Sequelize.STRING(32).BINARY,
+      field: 'input_transaction_id',
+      allowNull: true
+    },
+    inputIndex: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      allowNull: true
+    },
+    scriptSig: {
+      type: Sequelize.BLOB,
+      field: 'scriptsig',
+      allowNull: true
+    },
+    sequence: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      allowNull: true
+    },
+    inputHeight: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      allowNull: true
+    },
     value: {
       type: Sequelize.BIGINT,
       get() {
-        return BigInt(this.getDataValue('value'))
+        let value = this.getDataValue('value')
+        return value == null ? null : BigInt(value)
       },
       set(value) {
         return this.setDataValue('value', value.toString())
       }
     },
-    addressId: Sequelize.INTEGER.UNSIGNED,
-    spent: Sequelize.BOOLEAN
+    addressId: Sequelize.BIGINT.UNSIGNED
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
-  let Input = sequelize.define('input', {
-    transactionId: {
-      type: Sequelize.CHAR(32).BINARY,
-      primaryKey: true
-    },
-    inputIndex: {
-      type: Sequelize.INTEGER.UNSIGNED,
-      primaryKey: true
-    },
-    prevTxId: {type: Sequelize.CHAR(32).BINARY, field: 'prev_transaction_id'},
-    outputIndex: Sequelize.INTEGER.UNSIGNED,
-    scriptSig: {type: Sequelize.BLOB, field: 'scriptsig'},
-    sequence: Sequelize.INTEGER.UNSIGNED
-  }, {freezeTableName: true, underscored: true, timestamps: false})
-
-  sequelize.models.transaction.hasMany(Output, {as: 'outputs', foreignKey: 'transactionId', sourceKey: 'id'})
-  Output.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId', targetKey: 'id'})
-  sequelize.models.transaction.hasMany(Input, {as: 'inputs', foreignKey: 'transactionId', sourceKey: 'id'})
-  Input.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId', targetKey: 'id'})
-  sequelize.models.address.hasMany(Output, {as: 'txos', foreignKey: 'addressId'})
-  Output.belongsTo(sequelize.models.address, {as: 'address', foreignKey: 'addressId'})
-  Output.hasOne(Input, {as: 'spend', foreignKey: 'prevTxId', sourceKey: 'transactionId'})
-  Input.belongsTo(Output, {as: 'source', foreignKey: 'prevTxId', sourceKey: 'transactionId'})
+  sequelize.models.transaction.hasMany(TransactionOutput, {as: 'outputs', foreignKey: 'outputTxId', sourceKey: 'id'})
+  TransactionOutput.belongsTo(sequelize.models.transaction, {as: 'outputTransaction', foreignKey: 'outputTxId', targetKey: 'id'})
+  sequelize.models.transaction.hasMany(TransactionOutput, {as: 'inputs', foreignKey: 'inputTxId', sourceKey: 'id'})
+  TransactionOutput.belongsTo(sequelize.models.transaction, {as: 'inputTransaction', foreignKey: 'inputTxId', targetKey: 'id'})
+  sequelize.models.address.hasMany(TransactionOutput, {as: 'txos', foreignKey: 'addressId'})
+  TransactionOutput.belongsTo(sequelize.models.address, {as: 'address', foreignKey: 'addressId'})
 }
