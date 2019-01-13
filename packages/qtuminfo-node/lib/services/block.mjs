@@ -252,18 +252,18 @@ export default class BlockService extends Service {
   async _findBlocksToRemove(commonHeader) {
     let hash = this._tip.hash
     let blocks = []
+    let {height} = await this.Block.findOne({
+      where: {hashString: hash.toString('hex')},
+      attributes: ['height']
+    })
     for (let i = 0; i < this._recentBlockHashes.length && Buffer.compare(hash, commonHeader.hash) !== 0; ++i) {
-      let {header} = await this.Block.findOne({
-        where: {hashString: hash.toString('hex')},
-        attributes: [],
-        include: [{
-          model: this.Header,
-          required: true,
-          attributes: ['hash', 'height', 'prevHash']
-        }]
+      let prevBlock = await this.Block.findOne({
+        where: {height},
+        attributes: ['hashString']
       })
-      blocks.push(header)
-      hash = header.prevHash
+      blocks.push({height, hash})
+      --height
+      hash = prevBlock.hash
     }
     return blocks
   }
