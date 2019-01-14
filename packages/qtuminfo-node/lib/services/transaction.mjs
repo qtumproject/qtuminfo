@@ -2,6 +2,8 @@ import Sequelize from 'sequelize'
 import {Address} from 'qtuminfo-lib'
 import Service from './base'
 
+const {gt: $gt, in: $in} = Sequelize.Op
+
 export default class TransactionService extends Service {
   constructor(options) {
     super(options)
@@ -32,12 +34,12 @@ export default class TransactionService extends Service {
     await this.TransactionOutput.destroy({
       where: {
         outputTxId: null,
-        inputHeight: {[Sequelize.Op.gt]: this._tip.height}
+        inputHeight: {[$gt]: this._tip.height}
       }
     })
     await this.TransactionOutput.update(
       {inputTxId: null, inputIndex: null, scriptSig: null, sequence: null, inputHeight: null},
-      {where: {inputHeight: {[Sequelize.Op.gt]: this._tip.height}}}
+      {where: {inputHeight: {[$gt]: this._tip.height}}}
     )
     await this.db.query(`
       DELETE tx, witness, txo, receipt, log, topic, refund, contract_spend, balance
@@ -52,7 +54,7 @@ export default class TransactionService extends Service {
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.block_height > ${this._tip.height}
     `)
-    await this.Address.destroy({where: {createHeight: {[Sequelize.Op.gt]: this._tip.height}}})
+    await this.Address.destroy({where: {createHeight: {[$gt]: this._tip.height}}})
     await this.node.updateServiceTip(this.name, this._tip)
   }
 
@@ -367,13 +369,13 @@ export default class TransactionService extends Service {
     let refundTxos = await this.TransactionOutput.findAll({
       where: {
         outputTxId: block.transactions[block.header.isProofOfStake() ? 1 : 0].id,
-        outputIndex: {[Sequelize.Op.gt]: 0}
+        outputIndex: {[$gt]: 0}
       },
       attributes: ['outputIndex', 'value', 'addressId']
     })
     let senderMap = new Map((await this.TransactionOutput.findAll({
       where: {
-        inputTxId: {[Sequelize.Op.in]: receiptIndices.map(index => block.transactions[index].id)},
+        inputTxId: {[$in]: receiptIndices.map(index => block.transactions[index].id)},
         inputIndex: 0
       },
       attributes: ['inputTxId', 'addressId']

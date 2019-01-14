@@ -5,6 +5,8 @@ import {Block} from 'qtuminfo-lib'
 import Service from './base'
 import {AsyncQueue} from '../utils'
 
+const {gt: $gt, between: $between} = Sequelize.Op
+
 export default class BlockService extends Service {
   constructor(options) {
     super(options)
@@ -90,7 +92,7 @@ export default class BlockService extends Service {
       this._tipResetNeeded = true
       return
     }
-    await this.Block.destroy({where: {height: {[Sequelize.Op.gt]: tip.height}}})
+    await this.Block.destroy({where: {height: {[$gt]: tip.height}}})
     this._header.on('reorg', () => {this._reorging = true})
     this._header.on('reorg complete', () => {this._reorging = false})
     await this._setTip(tip)
@@ -101,7 +103,7 @@ export default class BlockService extends Service {
     let hashes = (await this.Block.findAll({
       where: {
         height: {
-          [Sequelize.Op.between]: [
+          [$between]: [
             this._tip.height - this._recentBlockHashesCount,
             this._tip.height
           ]
@@ -141,7 +143,7 @@ export default class BlockService extends Service {
   }
 
   async onReorg(height) {
-    await this.Block.destroy({where: {height: {[Sequelize.Op.gt]: height}}})
+    await this.Block.destroy({where: {height: {[$gt]: height}}})
   }
 
   async _onReorg(blocks) {

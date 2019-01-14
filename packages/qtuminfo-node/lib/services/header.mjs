@@ -4,6 +4,8 @@ import {Header} from 'qtuminfo-lib'
 import Service from './base'
 import {AsyncQueue} from '../utils'
 
+const {gt: $gt, between: $between} = Sequelize.Op
+
 const MAX_CHAINWORK = 1n << 256n
 const STARTING_CHAINWORK = 0x100010001n
 
@@ -307,7 +309,7 @@ export default class HeaderService extends Service {
     }
     let startingHeight = tip.height + 1
     let results = (await this.Header.findAll({
-      where: {height: {[Sequelize.Op.between]: [startingHeight, startingHeight + blockCount]}},
+      where: {height: {[$between]: [startingHeight, startingHeight + blockCount]}},
       attributes: ['hash']
     })).map(header => header.hash)
     let index = numResultsNeeded - 1
@@ -321,7 +323,7 @@ export default class HeaderService extends Service {
 
   async _adjustHeadersForCheckpointTip() {
     this.logger.info('Header Service: getting last header synced at height:', this._tip.height)
-    await this.Header.destroy({where: {height: {[Sequelize.Op.gt]: this._tip.height}}})
+    await this.Header.destroy({where: {height: {[$gt]: this._tip.height}}})
     this._lastHeader = await this.Header.findByHeight(this._tip.height)
     this._tip.height = this._lastHeader.height
     this._tip.hash = this._lastHeader.hash
