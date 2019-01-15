@@ -366,6 +366,14 @@ export default class TransactionService extends Service {
         }
       })
     )
+    block.receipts = [].concat(...blockReceipts).map(({contractAddress, log: logs}) => ({
+      contractAddress: Buffer.from(contractAddress, 'hex'),
+      logs: logs.map(({address, topics, data}) => ({
+        address: Buffer.from(address, 'hex'),
+        topics: topics.map(topic => Buffer.from(topic, 'hex')),
+        data: Buffer.from(data, 'hex')
+      }))
+    }))
     let refundTxos = await this.TransactionOutput.findAll({
       where: {
         outputTxId: block.transactions[block.header.isProofOfStake() ? 1 : 0].id,

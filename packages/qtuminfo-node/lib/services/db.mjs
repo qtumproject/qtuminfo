@@ -1,4 +1,3 @@
-import fs from 'fs'
 import Sequelize from 'sequelize'
 import {Header} from 'qtuminfo-lib'
 import Rpc from 'qtuminfo-rpc'
@@ -11,6 +10,8 @@ import generateTransactionReceipt from '../models/transaction-receipt'
 import generateTransactionOutput from '../models/transaction-output'
 import generateContractTransaction from '../models/contract-transaction'
 import generateBalanceChange from '../models/balance-change'
+import generateContract from '../models/contract'
+import generateToken from '../models/token'
 import Service from './base'
 
 export default class DbService extends Service {
@@ -65,11 +66,6 @@ export default class DbService extends Service {
   }
 
   async start() {
-    try {
-      await fs.promises.access(this.node.datadir)
-    } catch (err) {
-      await fs.promises.mkdir(this.node.datadir)
-    }
     this._sequelize = new Sequelize(this.options.mysql.uri, {
       databaseVersion: 1,
       dialectOptions: {
@@ -87,6 +83,8 @@ export default class DbService extends Service {
     generateTransactionOutput(this._sequelize)
     generateContractTransaction(this._sequelize)
     generateBalanceChange(this._sequelize)
+    generateContract(this._sequelize)
+    generateToken(this._sequelize)
     this.Tip = this._sequelize.models.tip
   }
 

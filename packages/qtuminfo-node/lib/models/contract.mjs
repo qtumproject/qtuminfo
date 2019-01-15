@@ -1,48 +1,66 @@
-import mongoose from 'mongoose'
-import addressSchema from './address'
+import Sequelize from 'sequelize'
 
-const qrc20Schema = new mongoose.Schema({
-  name: {type: String, index: true},
-  symbol: {type: String, index: true},
-  decimals: Number,
-  totalSupply: {
-    type: String,
-    get: s => BigInt(`0x${s}`),
-    set: n => n.toString(16).padStart(64, '0')
-  },
-  version: String
-}, {_id: false})
+export default function generate(sequelize) {
+  let Contract = sequelize.define('contract', {
+    address: {
+      type: Sequelize.CHAR(20).BINARY,
+      primaryKey: true
+    },
+    addressString: Sequelize.CHAR(40),
+    vm: {
+      type: Sequelize.ENUM,
+      values: ['evm', 'x86']
+    },
+    type: {
+      type: Sequelize.ENUM,
+      values: ['dgp', 'qrc20', 'qrc721'],
+      allowNull: true
+    },
+    description: {
+      type: Sequelize.TEXT,
+      defaultValue: ''
+    },
+    ownerId: {
+      type: Sequelize.BIGINT.UNSIGNED,
+      defaultValue: '0'
+    },
+    createTxId: {
+      type: Sequelize.STRING(32).BINARY,
+      field: 'create_transaction_id',
+      allowNull: true
+    },
+    createHeight: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      allowNull: true
+    }
+  }, {freezeTableName: true, underscored: true, timestamps: false})
 
-const qrc721Schema = new mongoose.Schema({
-  name: {type: String, index: true},
-  symbol: {type: String, index: true},
-  totalSupply: {
-    type: String,
-    get: s => BigInt(`0x${s}`),
-    set: n => n.toString(16).padStart(64, '0')
-  }
-}, {_id: false})
+  let ContractCode = sequelize.define('contract_code', {
+    contractAddress: {
+      type: Sequelize.CHAR(20).BINARY,
+      primaryKey: true
+    },
+    code: Sequelize.BLOB,
+    source: {
+      type: Sequelize.TEXT('long'),
+      allowNull: true
+    }
+  }, {freezeTableName: true, underscored: true, timestamps: false})
 
-const contractSchema = new mongoose.Schema({
-  address: {
-    type: String,
-    index: true,
-    unique: true,
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex')
-  },
-  vm: String,
-  owner: addressSchema,
-  createTransactionId: {
-    type: String,
-    get: s => s && Buffer.from(s, 'hex'),
-    set: x => x && x.toString('hex')
-  },
-  createHeight: {type: Number, index: true},
-  type: {type: String, index: true},
-  tags: [{type: String, index: true}],
-  qrc20: qrc20Schema,
-  qrc721: qrc721Schema
-})
+  let ContractTag = sequelize.define('contract_tag', {
+    _id: {
+      type: Sequelize.BIGINT.UNSIGNED,
+      field: '_id',
+      primaryKey: true
+    },
+    contractAddress: Sequelize.CHAR(20).BINARY,
+    tag: Sequelize.STRING(32)
+  }, {freezeTableName: true, underscored: true, timestamps: false})
 
-export default mongoose.model('Contract', contractSchema)
+  sequelize.models.address.hasOne(Contract, {as: 'createdContracts', foreignKey: 'ownerId'})
+  Contract.belongsTo(sequelize.models.address, {as: 'owner', foreignKey: 'ownerId'})
+  Contract.hasOne(ContractCode, {as: 'code', foreignKey: 'contractAddress'})
+  ContractCode.belongsTo(Contract, {as: 'contract', foreignKey: 'contractAddress'})
+  Contract.hasMany(ContractTag, {as: 'tags', foreignKey: 'contractAddress'})
+  ContractTag.belongsTo(Contract, {as: 'contract', foreignKey: 'contractAddress'})
+}

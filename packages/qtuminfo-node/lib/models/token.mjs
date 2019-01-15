@@ -1,24 +1,84 @@
-import mongoose from 'mongoose'
+import Sequelize from 'sequelize'
 
-const qrc20TokenBalanceSchema = new mongoose.Schema({
-  contract: {
-    type: String,
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex')
-  },
-  address: {
-    type: String,
-    index: true,
-    get: s => Buffer.from(s, 'hex'),
-    set: x => x.toString('hex')
-  },
-  balance: {
-    type: String,
-    get: s => BigInt(`0x${s}`),
-    set: n => n.toString(16).padStart(64, '0')
-  }
-})
+export default function generate(sequelize) {
+  let QRC20 = sequelize.define('qrc20', {
+    contractAddress: {
+      type: Sequelize.CHAR(20).BINARY,
+      primaryKey: true
+    },
+    name: Sequelize.BLOB,
+    nameString: Sequelize.STRING(100),
+    symbol: Sequelize.BLOB,
+    symbolString: Sequelize.STRING(100),
+    decimals: Sequelize.INTEGER(3).UNSIGNED,
+    totalSupply: {
+      type: Sequelize.CHAR(32).BINARY,
+      get() {
+        return BigInt(`0x${this.getDataValue('totalSupply').toString('hex')}`)
+      },
+      set(value) {
+        return this.setDataValue(
+          'totalSupply',
+          Buffer.from(value.toString(16).padStart(64, '0'), 'hex')
+        )
+      }
+    },
+    version: {
+      type: Sequelize.BLOB,
+      allowNull: true
+    }
+  }, {freezeTableName: true, underscored: true, timestamps: false})
 
-qrc20TokenBalanceSchema.index({contract: 1, balance: -1})
+  let QRC20Balance = sequelize.define('qrc20_balance', {
+    contractAddress: {
+      type: Sequelize.CHAR(20).BINARY,
+      primaryKey: true
+    },
+    address: {
+      type: Sequelize.CHAR(20).BINARY,
+      primaryKey: true
+    },
+    balance: {
+      type: Sequelize.CHAR(32).BINARY,
+      get() {
+        return BigInt(`0x${this.getDataValue('balance').toString('hex')}`)
+      },
+      set(value) {
+        return this.setDataValue(
+          'balance',
+          Buffer.from(value.toString(16).padStart(64, '0'), 'hex')
+        )
+      }
+    }
+  }, {freezeTableName: true, underscored: true, timestamps: false})
 
-export default mongoose.model('QRC20TokenBalance', qrc20TokenBalanceSchema)
+  let Qrc721 = sequelize.define('qrc721', {
+    contractAddress: {
+      type: Sequelize.CHAR(20).BINARY,
+      primaryKey: true
+    },
+    name: Sequelize.BLOB,
+    nameString: Sequelize.STRING(100),
+    symbol: Sequelize.BLOB,
+    symbolString: Sequelize.STRING(100),
+    totalSupply: {
+      type: Sequelize.CHAR(32).BINARY,
+      get() {
+        return BigInt(`0x${this.getDataValue('totalSupply').toString('hex')}`)
+      },
+      set(value) {
+        return this.setDataValue(
+          'totalSupply',
+          Buffer.from(value.toString(16).padStart(64, '0'), 'hex')
+        )
+      }
+    }
+  }, {freezeTableName: true, underscored: true, timestamps: false})
+
+  sequelize.models.contract.hasOne(QRC20, {as: 'qrc20', foreignKey: 'contractAddress'})
+  QRC20.belongsTo(sequelize.models.contract, {as: 'contract', foreignKey: 'contractAddress'})
+  sequelize.models.contract.hasMany(QRC20Balance, {as: 'qrc20Balances', foreignKey: 'contractAddress'})
+  QRC20Balance.belongsTo(sequelize.models.contract, {as: 'contract', foreignKey: 'contractAddress'})
+  sequelize.models.contract.hasOne(Qrc721, {as: 'qrc721', foreignKey: 'contractAddress'})
+  Qrc721.belongsTo(sequelize.models.contract, {as: 'contract', foreignKey: 'contractAddress'})
+}
