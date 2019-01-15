@@ -345,6 +345,8 @@ export default class TransactionService extends Service {
     if (contractSpends.length) {
       await this.ContractSpend.bulkCreate(contractSpends, {validate: false})
     }
+    block.transactionsCount = block.transactions.length - (block.height > 5000 ? 2 : 1) - contractSpends.length
+    block.contractTransactionsCount = receiptIndices.length
     if (receiptIndices.length === 0) {
       return
     }

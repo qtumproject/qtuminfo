@@ -418,38 +418,14 @@ export default class BlockService extends Service {
         }]
       })).addressId
     }
-    let transactionsCount = (await this.Transaction.findOne({
-      where: {blockHeight: header.height},
-      attributes: [[this.db.fn('max', this.db.col('index_in_block')), 'count']]
-    })).getDataValue('count')
-    if (header.height > 5000) {
-      --transactionsCount
-    }
-    transactionsCount -= await this.Transaction.count({
-      where: {blockHeight: header.height},
-      include: [{
-        model: this.ContractSpend,
-        as: 'contractSpendSource',
-        required: true
-      }]
-    })
-    let contractTransactionsCount = await this.Transaction.count({
-      where: {blockHeight: header.height},
-      distinct: true,
-      include: [{
-        model: this.Receipt,
-        as: 'receipts',
-        required: true
-      }]
-    })
     return await this.Block.create({
       hash: rawBlock.hash,
       height: header.height,
       size: rawBlock.size,
       weight: rawBlock.weight,
       minerId,
-      transactionsCount,
-      contractTransactionsCount
+      transactionsCount: rawBlock.transactionsCount,
+      contractTransactionsCount: rawBlock.contractTransactionsCount
     })
   }
 
