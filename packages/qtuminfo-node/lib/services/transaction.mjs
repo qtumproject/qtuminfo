@@ -4,6 +4,7 @@ import Service from './base'
 
 const {gt: $gt, in: $in} = Sequelize.Op
 
+
 export default class TransactionService extends Service {
   constructor(options) {
     super(options)
@@ -197,21 +198,14 @@ export default class TransactionService extends Service {
         addressIds[index].push(0)
         let address = Address.fromScript(tx.outputs[outputIndex].scriptPubKey, this.chain, tx.id, outputIndex)
         if (address) {
-          let type = address.type
-          let data = address.data
-          if (type === Address.PAY_TO_PUBLIC_KEY) {
-            type = Address.PAY_TO_PUBLIC_KEY_HASH
-          } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(type)) {
-            type = Address.CONTRACT
-          }
-          let key = `${data.toString('hex')}/${type}`
+          let key = `${address.data.toString('hex')}/${address.type}`
           let addressItem = addressMap.get(key)
           if (addressItem) {
             addressItem.indexes.push([index, outputIndex])
           } else {
             addressMap.set(key, {
-              type,
-              data,
+              type: address.type,
+              data: address.data,
               string: address.toString(),
               createHeight: block.height,
               indexes: [[index, outputIndex]]

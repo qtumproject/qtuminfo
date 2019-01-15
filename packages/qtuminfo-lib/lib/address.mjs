@@ -7,22 +7,19 @@ import {
 } from '.'
 
 const types = {
-  PAY_TO_PUBLIC_KEY: 'pubkey',
   PAY_TO_PUBLIC_KEY_HASH: 'pubkeyhash',
   PAY_TO_SCRIPT_HASH: 'scripthash',
   PAY_TO_WITNESS_KEY_HASH: 'witness_v0_keyhash',
   PAY_TO_WITNESS_SCRIPT_HASH: 'witness_v0_scripthash',
   CONTRACT: 'contract',
-  CONTRACT_CREATE: 'create',
-  CONTRACT_CALL: 'call'
+  EVM_CONTRACT: 'evm_contract'
 }
 
 export default class Address {
-  constructor({type, data, chain, vm}) {
+  constructor({type, data, chain}) {
     this.type = type
     this.data = data
     this.chain = chain
-    this.vm = vm
   }
 
   get [Symbol.toStringTag]() {
@@ -34,7 +31,7 @@ export default class Address {
     switch (script.type) {
     case Script.PUBKEY_OUT:
       return new Address({
-        type: types.PAY_TO_PUBLIC_KEY,
+        type: types.PAY_TO_PUBLIC_KEY_HASH,
         data: Hash.sha256ripemd160(script.chunks[0].buffer),
         chain
       })
@@ -64,23 +61,21 @@ export default class Address {
       })
     case Script.EVM_CONTRACT_CREATE:
       return new Address({
-        type: types.CONTRACT_CREATE,
+        type: types.EVM_CONTRACT,
         data: Hash.sha256ripemd160(
           Buffer.concat([Buffer.from(transactionId).reverse(), getUInt32LEBuffer(outputIndex)])
         ),
-        chain,
-        vm: 'evm'
+        chain
       })
     case Script.EVM_CONTRACT_CALL:
       return new Address({
-        type: types.CONTRACT_CALL,
+        type: types.EVM_CONTRACT,
         data: script.chunks[4].buffer,
-        chain,
-        vm: 'evm'
+        chain
       })
     case Script.CONTRACT_OUT:
       return new Address({
-        type: types.CONTRACT_CALL,
+        type: types.CONTRACT,
         data: script.chunks[4].buffer,
         chain
       })
@@ -92,8 +87,7 @@ export default class Address {
       return new Address({
         type: types.CONTRACT,
         data: Buffer.from(string, 'hex'),
-        chain,
-        vm: 'evm'
+        chain
       })
     }
     try {
@@ -108,6 +102,12 @@ export default class Address {
         } else if (result[0] === chain.scripthash) {
           return new Address({
             type: types.PAY_TO_SCRIPT_HASH,
+            data: result.slice(1),
+            chain
+          })
+        } else if (result[0] === chain.evm) {
+          return new Address({
+            type: types.EVM_CONTRACT,
             data: result.slice(1),
             chain
           })
@@ -144,7 +144,6 @@ export default class Address {
 
   toString() {
     switch (this.type) {
-    case types.PAY_TO_PUBLIC_KEY:
     case types.PAY_TO_PUBLIC_KEY_HASH:
       return Base58Check.encode(Buffer.from([this.chain.pubkeyhash, ...this.data]))
     case types.PAY_TO_SCRIPT_HASH:
@@ -153,9 +152,9 @@ export default class Address {
     case types.PAY_TO_WITNESS_SCRIPT_HASH:
       return SegwitAddress.encode(this.chain.witnesshrp, 0, this.data)
     case types.CONTRACT:
-    case types.CONTRACT_CREATE:
-    case types.CONTRACT_CALL:
       return this.data.toString('hex')
+    case types.EVM_CONTRACT:
+      return Base58Check.encode(Buffer.from([this.chain.evm, ...this.data]))
     }
   }
 

@@ -10,7 +10,11 @@ export default function generate(sequelize) {
     },
     type: {
       type: Sequelize.ENUM,
-      values: ['pubkeyhash', 'scripthash', 'witness_v0_keyhash', 'witness_v0_scripthash', 'contract'],
+      values: [
+        'pubkeyhash', 'scripthash',
+        'witness_v0_keyhash', 'witness_v0_scripthash',
+        'contract', 'evm_contract', 'x86_contract'
+      ],
       unique: 'address'
     },
     data: {

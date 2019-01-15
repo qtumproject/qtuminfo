@@ -58,7 +58,11 @@ export default class ContractService extends Service {
         let code = await this.node.getRpcClient().getcontractcode(dgpAddress.toString('hex'))
         await this.Contract.create({
           address: dgpAddress,
-          addressString: dgpAddress.toString('hex'),
+          addressString: new Address({
+            type: Address.EVM_CONTRACT,
+            data: dgpAddress,
+            chain: this.chain
+          }).toString(),
           vm: 'evm',
           type: 'dgp',
           owner: '0',
@@ -90,7 +94,7 @@ export default class ContractService extends Service {
               attributes: ['_id', 'data']
             }]
           })
-          let contract = await this._createContract(address, {transaction, block, ownerId: owner._id})
+          let contract = await this._createContract(address, 'evm', {transaction, block, ownerId: owner._id})
           if (contract && contract.type === 'qrc20') {
             await this._updateBalances(new Set([`${address.toString('hex')}:${owner.data.toString('hex')}`]))
           }
@@ -188,11 +192,11 @@ export default class ContractService extends Service {
       `)
     }
     for (let address of contractsToCreate) {
-      await this._createContract(Buffer.from(address, 'hex'))
+      await this._createContract(Buffer.from(address, 'hex'), 'evm')
     }
   }
 
-  async _createContract(address, {transaction, block, ownerId} = {}) {
+  async _createContract(address, vm, {transaction, block, ownerId} = {}) {
     let contract = await this.Contract.findOne({where: {address}})
     if (contract) {
       return contract
@@ -205,8 +209,12 @@ export default class ContractService extends Service {
     }
     contract = new this.Contract({
       address,
-      addressString: address.toString('hex'),
-      vm: 'evm',
+      addressString: new Address({
+        type: Address.EVM_CONTRACT,
+        data: address,
+        chain: this.chain
+      }).toString(),
+      vm,
       ...ownerId
         ? {
           ownerId,

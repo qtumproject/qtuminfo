@@ -6,7 +6,7 @@ export default function generate(sequelize) {
       type: Sequelize.CHAR(20).BINARY,
       primaryKey: true
     },
-    addressString: Sequelize.CHAR(40),
+    addressString: Sequelize.CHAR(34),
     vm: {
       type: Sequelize.ENUM,
       values: ['evm', 'x86']
