@@ -12,12 +12,14 @@ export default function generate(sequelize) {
     },
     size: Sequelize.INTEGER.UNSIGNED,
     weight: Sequelize.INTEGER.UNSIGNED,
-    minerId: Sequelize.BIGINT.UNSIGNED
+    minerId: Sequelize.BIGINT.UNSIGNED,
+    transactionsCount: Sequelize.INTEGER.UNSIGNED,
+    contractTransactionsCount: Sequelize.INTEGER.UNSIGNED
   }, {
     freezeTableName: true, underscored: true, timestamps: false,
     getterMethods: {
       hash() {
-        return Buffer.from(this.hashString, 'hex')
+        return this.hashString == null ? null : Buffer.from(this.hashString, 'hex')
       }
     },
     setterMethods: {

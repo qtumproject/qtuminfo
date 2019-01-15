@@ -4,6 +4,7 @@ export default function generate(sequelize) {
   let Transaction = sequelize.define('transaction', {
     _id: {
       type: Sequelize.BIGINT.UNSIGNED,
+      field: '_id',
       primaryKey: true,
       autoIncrement: true
     },
