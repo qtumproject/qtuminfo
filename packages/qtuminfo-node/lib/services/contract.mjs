@@ -4,7 +4,7 @@ import Sequelize from 'sequelize'
 import {Address, Solidity} from 'qtuminfo-lib'
 import Service from './base'
 
-const {gt: $gt, in: $in} = Sequelize.Op
+const {ne: $ne, gt: $gt, in: $in} = Sequelize.Op
 
 const totalSupplyABI = Solidity.qrc20ABIs.find(abi => abi.name === 'totalSupply')
 const balanceOfABI = Solidity.qrc20ABIs.find(abi => abi.name === 'balanceOf')
@@ -29,7 +29,6 @@ export default class ContractService extends Service {
     this.TransactionOutput = this.node.getModel('transaction_output')
     this.Receipt = this.node.getModel('receipt')
     this.ReceiptLog = this.node.getModel('receipt_log')
-    this.ReceiptTopic = this.node.getModel('receipt_topic')
     this.Contract = this.node.getModel('contract')
     this.ContractCode = this.node.getModel('contract_code')
     this.ContractTag = this.node.getModel('contract_tag')
@@ -122,44 +121,26 @@ export default class ContractService extends Service {
       WHERE create_height > ${height}
     `)
     let balanceChanges = new Set()
-    let results = await this.ReceiptTopic.findAll({
-      where: {topic: TransferABI.id, topicIndex: 0},
-      attributes: [],
+    let results = await this.ReceiptLog.findAll({
+      where: {topic1: TransferABI.id, topic3: {[$ne]: null}, topic4: null},
+      attributes: ['address', 'topic2', 'topic3'],
       include: [{
-        model: this.ReceiptLog,
-        as: 'log',
+        model: this.Receipt,
+        as: 'receipt',
         required: true,
-        where: {topicsCount: 3},
-        attributes: ['address'],
-        include: [
-          {
-            model: this.ReceiptTopic,
-            as: 'topics',
-            required: true,
-            attributes: ['topicIndex', 'topic']
-          },
-          {
-            model: this.Receipt,
-            as: 'receipt',
-            required: true,
-            attributes: [],
-            include: [{
-              model: this.Transaction,
-              as: 'transaction',
-              required: true,
-              where: {blockHeight: {[$gt]: height}},
-              attributes: []
-            }]
-          }
-        ]
+        attributes: [],
+        include: [{
+          model: this.Transaction,
+          as: 'transaction',
+          required: true,
+          where: {blockHeight: {[$gt]: height}},
+          attributes: []
+        }]
       }]
     })
-    for (let {log} of results) {
-      let {contractAddress, topics} = log
-      let sender = topics.find(topic => topic.topicIndex === 1).topic.slice(12)
-      let receiver = topics.find(topic => topic.topicIndex === 2).topic.slice(12)
-      balanceChanges.add(`${contractAddress.toString('hex')}:${sender.toString('hex')}`)
-      balanceChanges.add(`${contractAddress.toString('hex')}:${receiver.toString('hex')}`)
+    for (let {contractAddress, topic2, topic3} of results) {
+      balanceChanges.add(`${contractAddress.toString('hex')}:${topic2.slice(12).toString('hex')}`)
+      balanceChanges.add(`${contractAddress.toString('hex')}:${topic3.slice(12).toString('hex')}`)
     }
     await this._updateBalances(balanceChanges)
   }

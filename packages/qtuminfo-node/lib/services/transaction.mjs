@@ -353,7 +353,6 @@ export default class TransactionService extends Service {
     let gasRefunds = []
     let receipts = []
     let receiptLogs = []
-    let receiptTopics = []
     let client = this.node.getRpcClient()
     let blockReceipts = await Promise.all(
       await client.batch(() => {
@@ -385,7 +384,6 @@ export default class TransactionService extends Service {
       attributes: ['inputTxId', 'addressId']
     })).map(item => [item.inputTxId.toString('hex'), item.addressId]))
     let receiptIndex = -1
-    let logIndex = -1
     for (let index = 0; index < receiptIndices.length; ++index) {
       let tx = block.transactions[receiptIndices[index]]
       let indices = []
@@ -437,15 +435,12 @@ export default class TransactionService extends Service {
             receiptId: receiptIndex,
             logIndex: j,
             address: Buffer.from(address, 'hex'),
-            topicsCount: topics.length,
+            topic1: topics[0] && Buffer.from(topics[0], 'hex'),
+            topic2: topics[1] && Buffer.from(topics[1], 'hex'),
+            topic3: topics[2] && Buffer.from(topics[2], 'hex'),
+            topic4: topics[3] && Buffer.from(topics[3], 'hex'),
             data: Buffer.from(data, 'hex')
           })
-          ++logIndex
-          receiptTopics.push(...topics.map((topic, k) => ({
-            logId: logIndex,
-            topicIndex: k,
-            topic: Buffer.from(topic, 'hex')
-          })))
         }
       }
     }
@@ -454,11 +449,7 @@ export default class TransactionService extends Service {
     for (let log of receiptLogs) {
       log.receiptId = newReceipts[log.receiptId]._id
     }
-    let newReceiptLogs = await this.ReceiptLog.bulkCreate(receiptLogs, {validate: false})
-    for (let topic of receiptTopics) {
-      topic.logId = newReceiptLogs[topic.logId]._id
-    }
-    await this.ReceiptTopic.bulkCreate(receiptTopics, {validate: false})
+    await this.ReceiptLog.bulkCreate(receiptLogs, {validate: false})
   }
 
   async removeReplacedTransactions(tx) {
