@@ -82,6 +82,10 @@ export default class TransactionService extends Service {
       WHERE tx.block_height > ${height} AND tx.index_in_block < 2
         AND (tx.index_in_block = 0 OR tx.block_height > 5000)
     `)
+    await this.Transaction.update({blockHeight: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
+    await this.TransactionOutput.update({outputHeight: 0xffffffff}, {where: {outputHeight: {[$gt]: height}}})
+    await this.TransactionOutput.update({inputHeight: 0xffffffff}, {where: {inputHeight: {[$gt]: height}}})
+    await this.Address.update({createHeight: 0xffffffff}, {where: {createHeight: {[$gt]: height}}})
   }
 
   async onBlock(block) {
@@ -89,12 +93,12 @@ export default class TransactionService extends Service {
       return
     }
     let newTransactions = await this._processBlock(block)
-    await this._processOutputs(newTransactions, block)
-    await this._processInputs(newTransactions, block)
+    await this.processOutputs(newTransactions, block)
+    await this.processInputs(newTransactions, block)
     if (this.node.isSynced()) {
-      await this._processBalanceChanges({transactions: newTransactions})
+      await this.processBalanceChanges({transactions: newTransactions})
     } else {
-      await this._processBalanceChanges({block})
+      await this.processBalanceChanges({block})
     }
     await this._processContracts(block)
     this._tip.height = block.height
@@ -110,18 +114,26 @@ export default class TransactionService extends Service {
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
         if (index > 0) {
-          if (await this.Transaction.update(
+          let [foundInMempool] = await this.Transaction.update(
             {blockHeight: block.height, indexInBlock: index},
             {where: {id: tx.id}}
-          )[0]) {
-            await this.TransactionOutput.update(
-              {outputHeight: block.height},
-              {where: {outputTxId: tx.id}}
-            )
-            await this.TransactionOutput.update(
-              {inputHeight: block.height},
-              {where: {inputTxId: tx.id}}
-            )
+          )
+          if (foundInMempool) {
+            await Promise.all([
+              this.TransactionOutput.update(
+                {outputHeight: block.height},
+                {where: {outputTxId: tx.id}}
+              ),
+              this.TransactionOutput.update(
+                {inputHeight: block.height},
+                {where: {inputTxId: tx.id}}
+              ),
+              this.db.query(`
+                UPDATE address, transaction_output txo
+                SET address.create_height = LEAST(address.create_height, ${block.height})
+                WHERE address._id = txo.address_id AND txo.output_transaction_id = 0x${tx.id.toString('hex')}
+              `)
+            ])
             continue
           }
           await this.removeReplacedTransactions(tx)
@@ -183,7 +195,7 @@ export default class TransactionService extends Service {
     return newTransactions
   }
 
-  async _processOutputs(transactions, block) {
+  async processOutputs(transactions, block) {
     let addressMap = new Map()
     let addressIds = []
     for (let index = 0; index < transactions.length; ++index) {
@@ -257,7 +269,7 @@ export default class TransactionService extends Service {
     await this.TransactionOutput.bulkCreate(outputTxos, {validate: false})
   }
 
-  async _processInputs(transactions, block) {
+  async processInputs(transactions, block) {
     let inputTxos = []
     for (let tx of transactions) {
       for (let index = 0; index < tx.inputs.length; ++index) {
@@ -283,7 +295,7 @@ export default class TransactionService extends Service {
     })
   }
 
-  async _processBalanceChanges({block, transactions}) {
+  async processBalanceChanges({block, transactions}) {
     let filters
     if (block) {
       filters = [

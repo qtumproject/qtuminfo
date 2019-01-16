@@ -1,9 +1,4 @@
-import {Address} from 'qtuminfo-lib'
-import Transaction from '../models/transaction'
-import TransactionOutput from '../models/transaction-output'
 import Service from './base'
-import {toBigInt} from '../utils'
-import QtumBalanceChanges from '../models/qtum-balance-changes'
 
 export default class MempoolService extends Service {
   constructor(options) {
@@ -15,6 +10,12 @@ export default class MempoolService extends Service {
 
   static get dependencies() {
     return ['db', 'p2p', 'transaction']
+  }
+
+  async start() {
+    this.db = this.node.getDatabase()
+    this.Transaction = this.node.getModel('transaction')
+    this.Witness = this.node.getModel('witness')
   }
 
   _startSubscriptions() {
@@ -40,83 +41,47 @@ export default class MempoolService extends Service {
   }
 
   async _onTransaction(tx) {
+    if (!await this._validate(tx)) {
+      return
+    }
     await this._transaction.removeReplacedTransactions(tx)
-    let inputTxos = []
-    for (let index = 0; index < tx.inputs.length; ++index) {
-      let input = tx.inputs[index]
-      let txo = await TransactionOutput.findOne({
-        'output.transactionId': input.prevTxId,
-        'output.index': input.outputIndex
-      })
-      if (txo) {
-        txo.spent = {
-          height: 0xffffffff,
-          transactionId: tx.id,
-          index,
-          scriptSig: input.scriptSig.toBuffer(),
-          sequence: input.sequence
-        }
-        inputTxos.push(txo)
-      } else {
-        return
-      }
-    }
-    await Promise.all(inputTxos.map(txo => txo.save()))
-
-    let outputTxos = tx.outputs.map((output, index) => {
-      let address = Address.fromScript(output.scriptPubKey, this.chain, tx.id, index)
-      if (address.type === Address.PAY_TO_PUBLIC_KEY) {
-        address.type = Address.PAY_TO_PUBLIC_KEY_HASH
-      } else if ([Address.CONTRACT_CREATE, Address.CONTRACT_CALL].includes(address.type)) {
-        address.type = Address.CONTRACT
-      }
-      return {
-        output: {
-          transactionId: tx.id,
-          index,
-          scriptPubKey: output.scriptPubKey.toBuffer()
-        },
-        value: output.value,
-        ...address ? {address: {type: address.type, hex: address.data}} : {},
-        isStake: tx.outputs[0].scriptPubKey.isEmpty()
-      }
-    })
-    await TransactionOutput.insertMany(outputTxos, {ordered: false})
-
-    let relatedAddresses = []
-    let balanceChanges = await this._transaction.getBalanceChanges(tx.id)
-    for (let item of balanceChanges) {
-      item.id = tx.id
-      item.value = toBigInt(item.value)
-      if (item.address) {
-        relatedAddresses.push(item.address)
-      }
-    }
-    await QtumBalanceChanges.insertMany(balanceChanges, {ordered: false})
-
-    await Transaction.create({
+    let witnesses = []
+    await this.Transaction.create({
       id: tx.id,
       hash: tx.hash,
       version: tx.version,
-      marker: tx.marker,
-      flag: tx.flag,
-      witnesses: tx.witnesses,
+      marker: tx.marker || 0,
+      flag: Boolean(tx.flag),
       lockTime: tx.lockTime,
+      blockHeight: 0xffffffff,
+      indexInBlock: 0xffffffff,
       size: tx.size,
-      weight: tx.weight,
-      relatedAddresses
+      weight: tx.weight
     })
+    for (let i = 0; i < tx.witnesses.length; ++i) {
+      for (let j = 0; j < tx.witnesses[i].length; ++j) {
+        witnesses.push({
+          transactionId: tx.id,
+          inputIndex: i,
+          witnessIndex: j,
+          script: tx.witnesses[i][j]
+        })
+      }
+    }
+    await Promise.all([
+      this.Witness.bulkCreate(witnesses, {validate: false}),
+      this._transaction.processOutputs([tx], {height: 0xffffffff}),
+      this._transaction.processInputs([tx], {height: 0xffffffff})
+    ])
+    await this._transaction.processBalanceChanges({transactions: [tx]})
+  }
 
-    this.node.getTransaction(tx.id).then(transaction => {
-      for (let subscription of this.subscriptions.transaction) {
-        subscription.emit('mempool/transaction', transaction)
-      }
-      let relatedAddresses = transaction.balanceChanges
-        .filter(item => item.address)
-        .map(item => item.address.toString())
-      for (let subscription of this.subscriptions.address) {
-        subscription.emit('mempool/address', 'transaction', transaction, relatedAddresses)
-      }
-    })
+  async _validate(tx) {
+    let txos = tx.inputs.map(input => `(0x${input.prevTxId.toString('hex')}, ${input.outputIndex})`).join(', ')
+    let [{count}] = await this.db.query(
+      `SELECT COUNT(*) AS count FROM transaction_output WHERE (output_transaction_id, output_index) IN (${txos})`,
+      {type: this.db.QueryTypes.SELECT}
+    )
+    return Number(count) === tx.inputs.length
   }
 }
