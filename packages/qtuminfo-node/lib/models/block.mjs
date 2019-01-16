@@ -2,8 +2,8 @@ import Sequelize from 'sequelize'
 
 export default function generate(sequelize) {
   let Block = sequelize.define('block', {
-    hashString: {
-      type: Sequelize.CHAR(64),
+    hash: {
+      type: Sequelize.CHAR(32).BINARY,
       unique: true
     },
     height: {
@@ -15,18 +15,6 @@ export default function generate(sequelize) {
     minerId: Sequelize.BIGINT.UNSIGNED,
     transactionsCount: Sequelize.INTEGER.UNSIGNED,
     contractTransactionsCount: Sequelize.INTEGER.UNSIGNED
-  }, {
-    freezeTableName: true, underscored: true, timestamps: false,
-    getterMethods: {
-      hash() {
-        return this.hashString == null ? null : Buffer.from(this.hashString, 'hex')
-      }
-    },
-    setterMethods: {
-      hash(value) {
-        this.setDataValue('hashString', value.toString('hex'))
-      }
-    }
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
   sequelize.models.header.hasOne(Block, {foreignKey: 'height'})

@@ -62,13 +62,11 @@ export default class BlockService extends Service {
     this.logger.info('Block Service: retrieved all the headers of lookups')
     let block
     do {
-      block = await this.Block.findOne({where: {hashString: hash.toString('hex')}, attributes: ['hashString']})
-      if (block) {
-        hash = block.hash
-      } else {
+      block = await this.Block.findOne({where: {hash}, attributes: ['hash']})
+      if (!block) {
         this.logger.debug('Block Service: block:', hash.toString('hex'), 'was not found, proceeding to older blocks')
       }
-      let header = await this.Block.findOne({where: {height: --height}, attributes: ['hashString']})
+      let header = await this.Block.findOne({where: {height: --height}, attributes: ['hash']})
       assert(header, 'Header not found for reset')
       if (!block) {
         this.logger.debug('Block Service: trying block:', header.hash.toString('hex'))
@@ -112,7 +110,7 @@ export default class BlockService extends Service {
           ]
         }
       },
-      attributes: ['hashString'],
+      attributes: ['hash'],
       order: [['height', 'ASC']]
     })).map(block => block.hash)
     for (let i = 0; i < hashes.length - 1; ++i) {
@@ -259,14 +257,11 @@ export default class BlockService extends Service {
   async _findBlocksToRemove(commonHeader) {
     let hash = this._tip.hash
     let blocks = []
-    let {height} = await this.Block.findOne({
-      where: {hashString: hash.toString('hex')},
-      attributes: ['height']
-    })
+    let {height} = await this.Block.findOne({where: {hash}, attributes: ['height']})
     for (let i = 0; i < this._recentBlockHashes.length && Buffer.compare(hash, commonHeader.hash) !== 0; ++i) {
       let prevBlock = await this.Block.findOne({
         where: {height},
-        attributes: ['hashString']
+        attributes: ['hash']
       })
       blocks.push({height, hash})
       --height
@@ -312,10 +307,7 @@ export default class BlockService extends Service {
     }
     this._processingBlock = true
     try {
-      if (await this.Block.findOne({
-        where: {hashString: rawBlock.hash.toString('hex')},
-        attributes: ['height']
-      })) {
+      if (await this.Block.findOne({where: {hash: rawBlock.hash}, attributes: ['height']})) {
         this._processingBlock = false
         this.logger.debug('Block Service: not syncing, block already in database')
       } else {

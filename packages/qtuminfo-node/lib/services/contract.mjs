@@ -223,9 +223,7 @@ export default class ContractService extends Service {
         await this.QRC721.create({
           contractAddress: address,
           name,
-          nameString: name.toString(),
           symbol,
-          symbolString: symbol.toString(),
           totalSupply
         })
       } catch (err) {
@@ -259,9 +257,7 @@ export default class ContractService extends Service {
         await this.QRC20.create({
           contractAddress: address,
           name,
-          nameString: name.toString(),
           symbol,
-          symbolString: symbol.toString(),
           decimals,
           totalSupply,
           version

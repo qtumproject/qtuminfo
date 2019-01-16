@@ -12,10 +12,6 @@ export default function generate(sequelize) {
       type: Sequelize.CHAR(32).BINARY,
       unique: true
     },
-    idString: {
-      type: Sequelize.CHAR(64),
-      unique: true
-    },
     hash: Sequelize.CHAR(32).BINARY,
     version: Sequelize.INTEGER,
     marker: Sequelize.INTEGER.UNSIGNED,

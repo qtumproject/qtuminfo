@@ -129,7 +129,6 @@ export default class TransactionService extends Service {
         newTransactions.push(tx)
         txs.push({
           id: tx.id,
-          idString: tx.id.toString('hex'),
           hash: tx.hash,
           version: tx.version,
           marker: tx.marker || 0,
@@ -157,7 +156,6 @@ export default class TransactionService extends Service {
         newTransactions.push(tx)
         txs.push({
           id: tx.id,
-          idString: tx.id.toString('hex'),
           hash: tx.hash,
           version: tx.version,
           marker: tx.marker || 0,

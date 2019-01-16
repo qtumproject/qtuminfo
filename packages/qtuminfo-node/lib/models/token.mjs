@@ -7,9 +7,7 @@ export default function generate(sequelize) {
       primaryKey: true
     },
     name: Sequelize.BLOB,
-    nameString: Sequelize.STRING(100),
     symbol: Sequelize.BLOB,
-    symbolString: Sequelize.STRING(100),
     decimals: Sequelize.INTEGER(3).UNSIGNED,
     totalSupply: {
       type: Sequelize.CHAR(32).BINARY,
@@ -58,9 +56,7 @@ export default function generate(sequelize) {
       primaryKey: true
     },
     name: Sequelize.BLOB,
-    nameString: Sequelize.STRING(100),
     symbol: Sequelize.BLOB,
-    symbolString: Sequelize.STRING(100),
     totalSupply: {
       type: Sequelize.CHAR(32).BINARY,
       get() {
