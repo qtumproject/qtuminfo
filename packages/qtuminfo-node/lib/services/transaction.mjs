@@ -26,7 +26,6 @@ export default class TransactionService extends Service {
     this.ContractSpend = this.node.getModel('contract_spend')
     this.Receipt = this.node.getModel('receipt')
     this.ReceiptLog = this.node.getModel('receipt_log')
-    this.ReceiptTopic = this.node.getModel('receipt_topic')
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
@@ -43,13 +42,12 @@ export default class TransactionService extends Service {
       {where: {inputHeight: {[$gt]: this._tip.height}}}
     )
     await this.db.query(`
-      DELETE tx, witness, txo, receipt, log, topic, refund, contract_spend, balance
+      DELETE tx, witness, txo, receipt, log, refund, contract_spend, balance
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
       LEFT JOIN transaction_output txo ON txo.output_transaction_id = tx.id
       LEFT JOIN receipt ON receipt.transaction_id = tx.id
       LEFT JOIN receipt_log log ON log.receipt_id = receipt._id
-      LEFT JOIN receipt_topic topic ON topic.log_id = log._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
@@ -67,11 +65,10 @@ export default class TransactionService extends Service {
       WHERE tx.id = input.transaction_id AND tx.block_height > ${Math.max(height, 5000)} AND tx.index_in_block = 1
     `)
     await this.db.query(`
-      DELETE receipt, log, topic, refund, contract_spend
+      DELETE receipt, log, refund, contract_spend
       FROM transaction tx
       LEFT JOIN receipt ON receipt.transaction_id = tx.id
       LEFT JOIN receipt_log log ON log.receipt_id = receipt._id
-      LEFT JOIN receipt_topic topic ON topic.log_id = log._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
       WHERE tx.block_height > ${height}
@@ -456,7 +453,7 @@ export default class TransactionService extends Service {
     let inputTxos = tx.inputs.map(input => `(0x${input.prevTxId.toString('hex')}, ${input.outputIndex})`)
     let transactionsToRemove = (await this.db.query(`
       SELECT DISTINCT(input_transaction_id) AS transactionId FROM transaction_output
-      WHERE (output_transaction_id, output_index) IN (${inputTxos.join(', ')})
+      WHERE (output_transaction_id, output_index) IN (${inputTxos.join(', ')}) AND input_transaction_id IS NOT NULL
     `, {type: this.db.QueryTypes.SELECT})).map(tx => tx.transactionId)
     for (let id of transactionsToRemove) {
       await this._removeMempoolTransaction(id)
