@@ -437,7 +437,7 @@ export default class BlockService extends Service {
       this.logger.info(
         'Block Service: the best block hash is:', this._tip.hash.toString('hex'),
         'at height:', `${this._tip.height}.`,
-        'Time between the last 2 blocks:', diff
+        'Block interval:', diff
       )
     } catch (err) {
       this._handleError(err)
