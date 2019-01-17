@@ -138,9 +138,9 @@ export default class ContractService extends Service {
         }]
       }]
     })
-    for (let {contractAddress, topic2, topic3} of results) {
-      balanceChanges.add(`${contractAddress.toString('hex')}:${topic2.slice(12).toString('hex')}`)
-      balanceChanges.add(`${contractAddress.toString('hex')}:${topic3.slice(12).toString('hex')}`)
+    for (let {address, topic2, topic3} of results) {
+      balanceChanges.add(`${address.toString('hex')}:${topic2.slice(12).toString('hex')}`)
+      balanceChanges.add(`${address.toString('hex')}:${topic3.slice(12).toString('hex')}`)
     }
     await this._updateBalances(balanceChanges)
   }

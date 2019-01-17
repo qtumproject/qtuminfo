@@ -62,7 +62,7 @@ export default class TransactionService extends Service {
       UPDATE transaction tx, transaction_output txo
       SET txo.input_transaction_id = NULL, txo.input_index = NULL,
         txo.scriptsig = NULL, txo.sequence = NULL, txo.input_height = NULL
-      WHERE tx.id = input.transaction_id AND tx.block_height > ${Math.max(height, 5000)} AND tx.index_in_block = 1
+      WHERE tx.id = txo.input_transaction_id AND tx.block_height > ${Math.max(height, 5000)} AND tx.index_in_block = 1
     `)
     await this.db.query(`
       DELETE receipt, log, refund, contract_spend
