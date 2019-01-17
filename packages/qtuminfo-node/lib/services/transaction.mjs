@@ -9,6 +9,7 @@ export default class TransactionService extends Service {
   constructor(options) {
     super(options)
     this._tip = null
+    this._synced = false
   }
 
   static get dependencies() {
@@ -95,7 +96,7 @@ export default class TransactionService extends Service {
     let newTransactions = await this._processBlock(block)
     await this.processOutputs(newTransactions, block)
     await this.processInputs(newTransactions, block)
-    if (this.node.isSynced()) {
+    if (this._synced) {
       await this.processBalanceChanges({transactions: newTransactions})
     } else {
       await this.processBalanceChanges({block})
@@ -106,11 +107,15 @@ export default class TransactionService extends Service {
     await this.node.updateServiceTip(this.name, this._tip)
   }
 
+  async onSynced() {
+    this._synced = true
+  }
+
   async _processBlock(block) {
     let newTransactions = []
     let txs = []
     let witnesses = []
-    if (this.node.isSynced()) {
+    if (this._synced) {
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
         if (index > 0) {

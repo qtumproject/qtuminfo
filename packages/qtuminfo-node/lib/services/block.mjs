@@ -259,12 +259,11 @@ export default class BlockService extends Service {
     let blocks = []
     let {height} = await this.Block.findOne({where: {hash}, attributes: ['height']})
     for (let i = 0; i < this._recentBlockHashes.length && Buffer.compare(hash, commonHeader.hash) !== 0; ++i) {
+      blocks.push({height, hash})
       let prevBlock = await this.Block.findOne({
-        where: {height},
+        where: {height: --height},
         attributes: ['hash']
       })
-      blocks.push({height, hash})
-      --height
       hash = prevBlock.hash
     }
     return blocks
