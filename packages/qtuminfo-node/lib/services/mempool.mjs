@@ -3,7 +3,7 @@ import Service from './base'
 export default class MempoolService extends Service {
   constructor(options) {
     super(options)
-    this.subscriptions = {transaction: [], address: []}
+    this.subscriptions = {transaction: []}
     this._transaction = this.node.services.get('transaction')
     this._enabled = false
   }
@@ -74,6 +74,10 @@ export default class MempoolService extends Service {
       this._transaction.processInputs([tx], {height: 0xffffffff})
     ])
     await this._transaction.processBalanceChanges({transactions: [tx]})
+
+    for (let subscription of this.subscriptions.transaction) {
+      subscription.emit('mempool/transaction', tx)
+    }
   }
 
   async _validate(tx) {

@@ -289,6 +289,9 @@ export default class BlockService extends Service {
     )
     await this._setTip({hash: commonAncestorHeader.hash, height: commonAncestorHeader.height})
     await this._processReorg(blocksToRemove)
+    for (let subscription of this.subscriptions.block) {
+      subscription.emit('block/reorg', {hash: commonAncestorHeader.hash, height: commonAncestorHeader.height})
+    }
   }
 
   async _processReorg(blocksToRemove) {
