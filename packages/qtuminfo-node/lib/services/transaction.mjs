@@ -1,9 +1,9 @@
+import assert from 'assert'
 import Sequelize from 'sequelize'
 import {Address} from 'qtuminfo-lib'
 import Service from './base'
 
 const {gt: $gt, in: $in} = Sequelize.Op
-
 
 export default class TransactionService extends Service {
   constructor(options) {
@@ -83,7 +83,10 @@ export default class TransactionService extends Service {
       WHERE tx.block_height > ${height} AND tx.index_in_block < 2
         AND (tx.index_in_block = 0 OR tx.block_height > 5000)
     `)
-    await this.Transaction.update({blockHeight: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
+    await this.Transaction.update(
+      {blockHeight: 0xffffffff, indexInBlock: 0xffffffff},
+      {where: {blockHeight: {[$gt]: height}}}
+    )
     await this.TransactionOutput.update({outputHeight: 0xffffffff}, {where: {outputHeight: {[$gt]: height}}})
     await this.TransactionOutput.update({inputHeight: 0xffffffff}, {where: {inputHeight: {[$gt]: height}}})
     await this.Address.update({createHeight: 0xffffffff}, {where: {createHeight: {[$gt]: height}}})
@@ -93,18 +96,23 @@ export default class TransactionService extends Service {
     if (this.node.stopping) {
       return
     }
-    let newTransactions = await this._processBlock(block)
-    await this.processOutputs(newTransactions, block)
-    await this.processInputs(newTransactions, block)
-    if (this._synced) {
-      await this.processBalanceChanges({transactions: newTransactions})
-    } else {
-      await this.processBalanceChanges({block})
+    try {
+      let newTransactions = await this._processBlock(block)
+      await this.processOutputs(newTransactions, block)
+      await this.processInputs(newTransactions, block)
+      if (this._synced) {
+        await this.processBalanceChanges({transactions: newTransactions})
+      } else {
+        await this.processBalanceChanges({block})
+      }
+      await this._processContracts(block)
+      this._tip.height = block.height
+      this._tip.hash = block.hash
+      await this.node.updateServiceTip(this.name, this._tip)
+    } catch (err) {
+      this.logger.error(err)
+      this.node.stop()
     }
-    await this._processContracts(block)
-    this._tip.height = block.height
-    this._tip.hash = block.hash
-    await this.node.updateServiceTip(this.name, this._tip)
   }
 
   async onSynced() {
@@ -116,34 +124,34 @@ export default class TransactionService extends Service {
     let txs = []
     let witnesses = []
     if (this._synced) {
+      let mempoolTransactions = await this.Transaction.findAll({
+        where: {id: {[$in]: block.transactions.slice(block.height > 5000 ? 2 : 1).map(tx => tx.id)}},
+        attributes: ['id']
+      })
+      let mempoolTransactionsSet = new Set()
+      if (mempoolTransactions.length) {
+        let ids = mempoolTransactions.map(tx => tx.id)
+        let hexIds = ids.map(id => `0x${id.toString('hex')}`)
+        mempoolTransactionsSet = new Set(ids.map(id => id.toString('hex')))
+        await Promise.all([
+          this.TransactionOutput.update(
+            {outputHeight: block.height},
+            {where: {outputTxId: {[$in]: ids}}}
+          ),
+          this.TransactionOutput.update(
+            {inputHeight: block.height},
+            {where: {inputTxId: {[$in]: ids}}}
+          ),
+          this.db.query(`
+            UPDATE address, transaction_output txo
+            SET address.create_height = LEAST(address.create_height, ${block.height})
+            WHERE address._id = txo.address_id AND txo.output_transaction_id IN (${hexIds.join(', ')})
+          `)
+        ])
+      }
+
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
-        if (index > 0) {
-          let [foundInMempool] = await this.Transaction.update(
-            {blockHeight: block.height, indexInBlock: index},
-            {where: {id: tx.id}}
-          )
-          if (foundInMempool) {
-            await Promise.all([
-              this.TransactionOutput.update(
-                {outputHeight: block.height},
-                {where: {outputTxId: tx.id}}
-              ),
-              this.TransactionOutput.update(
-                {inputHeight: block.height},
-                {where: {inputTxId: tx.id}}
-              ),
-              this.db.query(`
-                UPDATE address, transaction_output txo
-                SET address.create_height = LEAST(address.create_height, ${block.height})
-                WHERE address._id = txo.address_id AND txo.output_transaction_id = 0x${tx.id.toString('hex')}
-              `)
-            ])
-            continue
-          }
-          await this.removeReplacedTransactions(tx)
-        }
-        newTransactions.push(tx)
         txs.push({
           id: tx.id,
           hash: tx.hash,
@@ -156,6 +164,13 @@ export default class TransactionService extends Service {
           size: tx.size,
           weight: tx.weight
         })
+        if (mempoolTransactionsSet.has(tx.id.toString('hex'))) {
+          continue
+        }
+        if (index > 0) {
+          await this.removeReplacedTransactions(tx)
+        }
+        newTransactions.push(tx)
         for (let i = 0; i < tx.witnesses.length; ++i) {
           for (let j = 0; j < tx.witnesses[i].length; ++j) {
             witnesses.push({
@@ -195,7 +210,10 @@ export default class TransactionService extends Service {
         }
       }
     }
-    await this.Transaction.bulkCreate(txs, {validate: false})
+    await this.Transaction.bulkCreate(txs, {
+      updateOnDuplicate: ['blockHeight', 'indexInBlock'],
+      validate: false
+    })
     await this.Witness.bulkCreate(witnesses, {validate: false})
     return newTransactions
   }
@@ -471,6 +489,7 @@ export default class TransactionService extends Service {
       WHERE (output_transaction_id, output_index) IN (${inputTxos.join(', ')}) AND input_transaction_id IS NOT NULL
     `, {type: this.db.QueryTypes.SELECT})).map(tx => tx.transactionId)
     for (let id of transactionsToRemove) {
+      assert(Buffer.compare(id, tx.id) !== 0)
       await this._removeMempoolTransaction(id)
     }
   }
@@ -480,8 +499,9 @@ export default class TransactionService extends Service {
       where: {outputTxId: id},
       attributes: ['inputTxId']
     })).map(tx => tx.inputTxId)
-    for (let id of transactionsToRemove) {
-      await this._removeMempoolTransaction(id)
+    for (let subId of transactionsToRemove) {
+      assert(Buffer.compare(subId, id) !== 0)
+      await this._removeMempoolTransaction(subId)
     }
     await this.TransactionOutput.update(
       {inputTxId: null, inputIndex: null, scriptSig: null, sequence: null, inputHeight: null},
