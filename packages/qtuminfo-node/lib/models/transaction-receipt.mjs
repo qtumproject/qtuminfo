@@ -38,10 +38,10 @@ export default function generate(sequelize) {
     receiptId: Sequelize.BIGINT.UNSIGNED,
     logIndex: Sequelize.INTEGER.UNSIGNED,
     address: Sequelize.CHAR(20).BINARY,
-    topic1: Sequelize.STRING(20).BINARY,
-    topic2: Sequelize.STRING(20).BINARY,
-    topic3: Sequelize.STRING(20).BINARY,
-    topic4: Sequelize.STRING(20).BINARY,
+    topic1: Sequelize.STRING(32).BINARY,
+    topic2: Sequelize.STRING(32).BINARY,
+    topic3: Sequelize.STRING(32).BINARY,
+    topic4: Sequelize.STRING(32).BINARY,
     data: Sequelize.BLOB
   }, {freezeTableName: true, underscored: true, timestamps: false})
 

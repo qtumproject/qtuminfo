@@ -55,7 +55,6 @@ export default function generate(sequelize) {
     return Header.findOne({where: {hash}, ...options})
   }
   Header.prototype.isProofOfStake = function isProofOfStake() {
-    return Buffer.compare(this.stake_prev_transaction_id, Buffer.alloc(32)) !== 0
-      && this.stake_output_index !== 0xffffffff
+    return Buffer.compare(this.stakePrevTxId, Buffer.alloc(32)) !== 0 && this.stakeOutputIndex !== 0xffffffff
   }
 }
