@@ -133,21 +133,19 @@ export default class TransactionService extends Service {
         let ids = mempoolTransactions.map(tx => tx.id)
         let hexIds = ids.map(id => `0x${id.toString('hex')}`)
         mempoolTransactionsSet = new Set(ids.map(id => id.toString('hex')))
-        await Promise.all([
-          this.TransactionOutput.update(
-            {outputHeight: block.height},
-            {where: {outputTxId: {[$in]: ids}}}
-          ),
-          this.TransactionOutput.update(
-            {inputHeight: block.height},
-            {where: {inputTxId: {[$in]: ids}}}
-          ),
-          this.db.query(`
-            UPDATE address, transaction_output txo
-            SET address.create_height = LEAST(address.create_height, ${block.height})
-            WHERE address._id = txo.address_id AND txo.output_transaction_id IN (${hexIds.join(', ')})
-          `)
-        ])
+        await this.TransactionOutput.update(
+          {outputHeight: block.height},
+          {where: {outputTxId: {[$in]: ids}}}
+        )
+        await this.TransactionOutput.update(
+          {inputHeight: block.height},
+          {where: {inputTxId: {[$in]: ids}}}
+        )
+        await this.db.query(`
+          UPDATE address, transaction_output txo
+          SET address.create_height = LEAST(address.create_height, ${block.height})
+          WHERE address._id = txo.address_id AND txo.output_transaction_id IN (${hexIds.join(', ')})
+        `)
       }
 
       for (let index = 0; index < block.transactions.length; ++index) {
