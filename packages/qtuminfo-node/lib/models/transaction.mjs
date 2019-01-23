@@ -14,7 +14,6 @@ export default function generate(sequelize) {
     },
     hash: Sequelize.CHAR(32).BINARY,
     version: Sequelize.INTEGER,
-    marker: Sequelize.INTEGER.UNSIGNED,
     flag: Sequelize.INTEGER(3).UNSIGNED,
     lockTime: Sequelize.INTEGER.UNSIGNED,
     blockHeight: Sequelize.INTEGER.UNSIGNED,

@@ -4,14 +4,13 @@ import Input from './input'
 import Output from './output'
 
 export default class Transaction {
-  constructor({version, inputs, outputs, witnesses, lockTime, marker = null, flag = null}) {
+  constructor({version, flag, inputs, outputs, witnesses, lockTime}) {
     this.version = version
+    this.flag = flag
     this.inputs = inputs
     this.outputs = outputs
     this.witnesses = witnesses
     this.lockTime = lockTime
-    this.marker = marker
-    this.flag = flag
   }
 
   get id() {
@@ -39,14 +38,12 @@ export default class Transaction {
   static fromBufferReader(reader) {
     let version = reader.readUInt32LE()
     let inputs = []
-    let marker = null
-    let flag = null
+    let flag = 0
     let outputs = []
     let witnesses = []
-    let lockTime = null
+    let lockTime
     let inputCount = reader.readVarintNumber()
     if (!inputCount) {
-      marker = inputCount
       flag = reader.readUInt8()
       inputCount = reader.readVarintNumber()
     }
@@ -70,7 +67,7 @@ export default class Transaction {
       }
     }
     lockTime = reader.readUInt32LE()
-    return new Transaction({version, inputs, outputs, witnesses, marker, flag, lockTime})
+    return new Transaction({version, flag, inputs, outputs, witnesses, lockTime})
   }
 
   toBuffer() {
@@ -87,10 +84,8 @@ export default class Transaction {
 
   toBufferWriter(writer) {
     writer.writeInt32LE(this.version)
-    if (this.marker != null) {
+    if (this.flag) {
       writer.writeUInt8(0)
-    }
-    if (this.flag != null) {
       writer.writeUInt8(this.flag)
     }
     writer.writeVarintNumber(this.inputs.length)

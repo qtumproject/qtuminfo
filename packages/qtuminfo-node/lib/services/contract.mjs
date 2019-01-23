@@ -13,11 +13,6 @@ const transferABI = Solidity.qrc20ABIs.find(abi => abi.name === 'transfer')
 const TransferABI = Solidity.qrc20ABIs.find(abi => abi.name === 'Transfer')
 
 export default class ContractService extends Service {
-  constructor(options) {
-    super(options)
-    this._contractCodeDirectory = path.resolve(this.node.datadir, 'contract-code')
-  }
-
   static get dependencies() {
     return ['block', 'db', 'transaction']
   }
@@ -39,11 +34,6 @@ export default class ContractService extends Service {
     let blockTip = await this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
       this._tip = {height: blockTip.height, hash: blockTip.hash}
-    }
-    try {
-      await fs.promises.access(this._contractCodeDirectory)
-    } catch (err) {
-      await fs.promises.mkdir(this._contractCodeDirectory)
     }
     await this.onReorg(this._tip.height)
     await this.node.updateServiceTip(this.name, this._tip)
