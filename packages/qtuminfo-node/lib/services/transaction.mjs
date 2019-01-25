@@ -150,6 +150,7 @@ export default class TransactionService extends Service {
 
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
+        tx.indexInBlock = index
         txs.push({
           id: tx.id,
           hash: tx.hash,
@@ -182,6 +183,7 @@ export default class TransactionService extends Service {
     } else {
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
+        tx.indexInBlock = index
         newTransactions.push(tx)
         txs.push({
           id: tx.id,
@@ -281,7 +283,8 @@ export default class TransactionService extends Service {
           scriptPubKey: output.scriptPubKey.toBuffer(),
           outputHeight: block.height,
           value: output.value,
-          addressId: addressIds[index][outputIndex]
+          addressId: addressIds[index][outputIndex],
+          isStake: tx.indexInBlock === 0 || block.height > 5000 && tx.indexInBlock === 1
         })
       }
     }
@@ -304,7 +307,8 @@ export default class TransactionService extends Service {
           sequence: input.sequence,
           inputHeight: block.height,
           value: 0n,
-          addressId: '0'
+          addressId: '0',
+          isStake: false
         })
       }
     }

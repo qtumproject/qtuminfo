@@ -57,7 +57,8 @@ export default function generate(sequelize) {
         return this.setDataValue('value', value.toString())
       }
     },
-    addressId: Sequelize.BIGINT.UNSIGNED
+    addressId: Sequelize.BIGINT.UNSIGNED,
+    isStake: Sequelize.BOOLEAN
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
   sequelize.models.transaction.hasMany(TransactionOutput, {as: 'outputs', foreignKey: 'outputTxId', sourceKey: 'id'})
