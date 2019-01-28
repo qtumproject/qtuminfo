@@ -89,6 +89,10 @@ export default class TransactionService extends Service {
     )
     await this.TransactionOutput.update({outputHeight: 0xffffffff}, {where: {outputHeight: {[$gt]: height}}})
     await this.TransactionOutput.update({inputHeight: 0xffffffff}, {where: {inputHeight: {[$gt]: height}}})
+    await this.BalanceChange.update(
+      {blockHeight: 0xffffffff, indexInBlock: 0xffffffff},
+      {where: {blockHeight: {[$gt]: height}}}
+    )
     await this.Address.update({createHeight: 0xffffffff}, {where: {createHeight: {[$gt]: height}}})
   }
 
@@ -101,9 +105,9 @@ export default class TransactionService extends Service {
       await this.processOutputs(newTransactions, block)
       await this.processInputs(newTransactions, block)
       if (this._synced) {
-        await this.processBalanceChanges({transactions: newTransactions})
+        await this.processBalanceChanges(block, newTransactions)
       } else {
-        await this.processBalanceChanges({block})
+        await this.processBalanceChanges(block)
       }
       await this._processContracts(block)
       this._tip.height = block.height
@@ -318,14 +322,9 @@ export default class TransactionService extends Service {
     })
   }
 
-  async processBalanceChanges({block, transactions}) {
+  async processBalanceChanges(block, transactions) {
     let filters
-    if (block) {
-      filters = [
-        `output_height = ${block.height}`,
-        `input_height = ${block.height}`
-      ]
-    } else {
+    if (transactions) {
       if (transactions.length === 0) {
         return
       }
@@ -334,11 +333,18 @@ export default class TransactionService extends Service {
         `output_transaction_id IN (${ids})`,
         `input_transaction_id IN (${ids})`
       ]
+    } else {
+      filters = [
+        `output_height = ${block.height}`,
+        `input_height = ${block.height}`
+      ]
     }
     await this.db.query(`
-      INSERT INTO balance_change (transaction_id, address_id, value)
+      INSERT INTO balance_change (transaction_id, block_height, index_in_block, address_id, value)
       SELECT
         tx._id AS transaction_id,
+        tx.block_height AS block_height,
+        tx.index_in_block AS index_in_block,
         block_balance.address_id AS address_id,
         SUM(block_balance.value) AS value
       FROM (
@@ -352,6 +358,12 @@ export default class TransactionService extends Service {
       ) AS block_balance
       LEFT JOIN transaction tx ON tx.id = block_balance.transaction_id
       GROUP BY tx._id, block_balance.address_id
+    `)
+    await this.db.query(`
+      UPDATE balance_change balance, transaction tx
+      SET balance.block_height = ${block.height},
+        balance.index_in_block = (SELECT index_in_block from transaction WHERE transaction._id = balance.transaction_id)
+      WHERE tx._id = balance.transaction_id AND tx.block_height = ${block.height}
     `)
   }
 

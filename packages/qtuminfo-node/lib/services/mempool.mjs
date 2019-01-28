@@ -72,7 +72,7 @@ export default class MempoolService extends Service {
       this._transaction.processOutputs([tx], {height: 0xffffffff}),
       this._transaction.processInputs([tx], {height: 0xffffffff})
     ])
-    await this._transaction.processBalanceChanges({transactions: [tx]})
+    await this._transaction.processBalanceChanges({height: 0xffffffff}, [tx])
 
     for (let subscription of this.subscriptions.transaction) {
       subscription.emit('mempool/transaction', tx)

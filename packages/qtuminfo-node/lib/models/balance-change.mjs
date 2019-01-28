@@ -6,6 +6,8 @@ export default function generate(sequelize) {
       type: Sequelize.BIGINT.UNSIGNED,
       primaryKey: true
     },
+    blockHeight: Sequelize.INTEGER.UNSIGNED,
+    indexInBlock: Sequelize.INTEGER.UNSIGNED,
     addressId: {
       type: Sequelize.BIGINT.UNSIGNED,
       primaryKey: true
