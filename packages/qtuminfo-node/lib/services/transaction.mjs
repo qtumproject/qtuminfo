@@ -93,6 +93,11 @@ export default class TransactionService extends Service {
       {blockHeight: 0xffffffff, indexInBlock: 0xffffffff},
       {where: {blockHeight: {[$gt]: height}}}
     )
+    await this.db.query(`
+      UPDATE balance_change balance, transaction tx
+      SET balance.block_height = 0xffffffff, balance.index_in_block = 0xffffffff
+      WHERE balance.transaction_id = tx._id AND tx.block_height > ${height}
+    `)
     await this.Address.update({createHeight: 0xffffffff}, {where: {createHeight: {[$gt]: height}}})
   }
 
@@ -328,6 +333,13 @@ export default class TransactionService extends Service {
       if (transactions.length === 0) {
         return
       }
+      if (block.height < 0xffffffff) {
+        await this.db.query(`
+          UPDATE balance_change balance, transaction tx
+          SET balance.block_height = ${block.height}, balance.index_in_block = tx.index_in_block
+          WHERE tx._id = balance.transaction_id AND tx.block_height = ${block.height}
+        `)
+      }
       let ids = transactions.map(tx => `0x${tx.id.toString('hex')}`).join(', ')
       filters = [
         `output_transaction_id IN (${ids})`,
@@ -358,12 +370,6 @@ export default class TransactionService extends Service {
       ) AS block_balance
       LEFT JOIN transaction tx ON tx.id = block_balance.transaction_id
       GROUP BY tx._id, block_balance.address_id
-    `)
-    await this.db.query(`
-      UPDATE balance_change balance, transaction tx
-      SET balance.block_height = ${block.height},
-        balance.index_in_block = (SELECT index_in_block from transaction WHERE transaction._id = balance.transaction_id)
-      WHERE tx._id = balance.transaction_id AND tx.block_height = ${block.height}
     `)
   }
 
