@@ -81,7 +81,6 @@ export default class BlockService extends Service {
     this.Block = this.node.getModel('block')
     this.Transaction = this.node.getModel('transaction')
     this.TransactionOutput = this.node.getModel('transaction_output')
-    this.Receipt = this.node.getModel('receipt')
     this.ContractSpend = this.node.getModel('contract_spend')
     let tip = await this.node.getServiceTip('block')
     if (tip.height > 0 && !await this.Block.findOne({where: {height: tip.height}, attributes: ['height']})) {

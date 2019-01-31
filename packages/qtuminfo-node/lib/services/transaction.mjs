@@ -47,7 +47,7 @@ export default class TransactionService extends Service {
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
       LEFT JOIN transaction_output txo ON txo.output_transaction_id = tx.id
-      LEFT JOIN receipt ON receipt.transaction_id = tx.id
+      LEFT JOIN receipt ON receipt.transaction_id = tx._id
       LEFT JOIN receipt_log log ON log.receipt_id = receipt._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
@@ -68,7 +68,7 @@ export default class TransactionService extends Service {
     await this.db.query(`
       DELETE receipt, log, refund, contract_spend
       FROM transaction tx
-      LEFT JOIN receipt ON receipt.transaction_id = tx.id
+      LEFT JOIN receipt ON receipt.transaction_id = tx._id
       LEFT JOIN receipt_log log ON log.receipt_id = receipt._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
@@ -119,7 +119,7 @@ export default class TransactionService extends Service {
       this._tip.hash = block.hash
       await this.node.updateServiceTip(this.name, this._tip)
     } catch (err) {
-      this.logger.error(err)
+      this.logger.error('Transaction Service:', err)
       this.node.stop()
     }
   }
@@ -398,6 +398,11 @@ export default class TransactionService extends Service {
     if (receiptIndices.length === 0) {
       return
     }
+    let transactionIds = (await this.Transaction.findAll({
+      where: {blockHeight: block.height},
+      attributes: ['_id'],
+      order: [['indexInBlock', 'ASC']]
+    })).map(tx => tx._id)
     let gasRefunds = []
     let receipts = []
     let receiptLogs = []
@@ -433,7 +438,8 @@ export default class TransactionService extends Service {
     })).map(item => [item.inputTxId.toString('hex'), item.addressId]))
     let receiptIndex = -1
     for (let index = 0; index < receiptIndices.length; ++index) {
-      let tx = block.transactions[receiptIndices[index]]
+      let indexInBlock = receiptIndices[index]
+      let tx = block.transactions[indexInBlock]
       let indices = []
       for (let i = 0; i < tx.outputs.length; ++i) {
         if (tx.outputs[i].scriptPubKey.isEVMContractCreate() || tx.outputs[i].scriptPubKey.isEVMContractCall()) {
@@ -471,7 +477,9 @@ export default class TransactionService extends Service {
         }
         ++receiptIndex
         receipts.push({
-          transactionId: tx.id,
+          transactionId: transactionIds[indexInBlock],
+          blockHeight: block.height,
+          indexInBlock,
           outputIndex: indices[i],
           gasUsed,
           contractAddress: Buffer.from(contractAddress, 'hex'),

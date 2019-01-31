@@ -1,5 +1,3 @@
-import fs from 'fs'
-import path from 'path'
 import Sequelize from 'sequelize'
 import {Address, Solidity} from 'qtuminfo-lib'
 import Service from './base'
@@ -20,7 +18,6 @@ export default class ContractService extends Service {
   async start() {
     this.db = this.node.getDatabase()
     this.Address = this.node.getModel('address')
-    this.Transaction = this.node.getModel('transaction')
     this.TransactionOutput = this.node.getModel('transaction_output')
     this.Receipt = this.node.getModel('receipt')
     this.ReceiptLog = this.node.getModel('receipt_log')
@@ -118,14 +115,8 @@ export default class ContractService extends Service {
         model: this.Receipt,
         as: 'receipt',
         required: true,
-        attributes: [],
-        include: [{
-          model: this.Transaction,
-          as: 'transaction',
-          required: true,
-          where: {blockHeight: {[$gt]: height}},
-          attributes: []
-        }]
+        where: {blockHeight: {[$gt]: height}},
+        attributes: []
       }]
     })
     for (let {address, topic2, topic3} of results) {

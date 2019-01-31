@@ -9,9 +9,11 @@ export default function generate(sequelize) {
       autoIncrement: true
     },
     transactionId: {
-      type: Sequelize.CHAR(32).BINARY,
+      type: Sequelize.BIGINT.UNSIGNED,
       unique: 'transaction'
     },
+    blockHeight: Sequelize.INTEGER.UNSIGNED,
+    indexInBlock: Sequelize.INTEGER.UNSIGNED,
     outputIndex: {
       type: Sequelize.INTEGER.UNSIGNED,
       unique: 'transaction'
@@ -45,8 +47,8 @@ export default function generate(sequelize) {
     data: Sequelize.BLOB
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
-  sequelize.models.transaction.hasMany(Receipt, {as: 'receipts', foreignKey: 'transactionId', sourceKey: 'id'})
-  Receipt.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId', targetKey: 'id'})
+  sequelize.models.transaction.hasMany(Receipt, {as: 'receipts', foreignKey: 'transactionId'})
+  Receipt.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId'})
   Receipt.hasMany(ReceiptLog, {as: 'logs', foreignKey: 'receiptId'})
   ReceiptLog.belongsTo(Receipt, {as: 'receipt', foreignKey: 'receiptId'})
 }

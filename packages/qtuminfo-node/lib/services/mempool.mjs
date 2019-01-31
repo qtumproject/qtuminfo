@@ -41,41 +41,46 @@ export default class MempoolService extends Service {
   }
 
   async _onTransaction(tx) {
-    if (!await this._validate(tx)) {
-      return
-    }
-    await this._transaction.removeReplacedTransactions(tx)
-    let witnesses = []
-    await this.Transaction.create({
-      id: tx.id,
-      hash: tx.hash,
-      version: tx.version,
-      flag: tx.flag,
-      lockTime: tx.lockTime,
-      blockHeight: 0xffffffff,
-      indexInBlock: 0xffffffff,
-      size: tx.size,
-      weight: tx.weight
-    })
-    for (let i = 0; i < tx.witnesses.length; ++i) {
-      for (let j = 0; j < tx.witnesses[i].length; ++j) {
-        witnesses.push({
-          transactionId: tx.id,
-          inputIndex: i,
-          witnessIndex: j,
-          script: tx.witnesses[i][j]
-        })
+    try {
+      if (!await this._validate(tx)) {
+        return
       }
-    }
-    await Promise.all([
-      this.Witness.bulkCreate(witnesses, {validate: false}),
-      this._transaction.processOutputs([tx], {height: 0xffffffff}),
-      this._transaction.processInputs([tx], {height: 0xffffffff})
-    ])
-    await this._transaction.processBalanceChanges({height: 0xffffffff}, [tx])
+      await this._transaction.removeReplacedTransactions(tx)
+      let witnesses = []
+      await this.Transaction.create({
+        id: tx.id,
+        hash: tx.hash,
+        version: tx.version,
+        flag: tx.flag,
+        lockTime: tx.lockTime,
+        blockHeight: 0xffffffff,
+        indexInBlock: 0xffffffff,
+        size: tx.size,
+        weight: tx.weight
+      })
+      for (let i = 0; i < tx.witnesses.length; ++i) {
+        for (let j = 0; j < tx.witnesses[i].length; ++j) {
+          witnesses.push({
+            transactionId: tx.id,
+            inputIndex: i,
+            witnessIndex: j,
+            script: tx.witnesses[i][j]
+          })
+        }
+      }
+      await Promise.all([
+        this.Witness.bulkCreate(witnesses, {validate: false}),
+        this._transaction.processOutputs([tx], {height: 0xffffffff}),
+        this._transaction.processInputs([tx], {height: 0xffffffff})
+      ])
+      await this._transaction.processBalanceChanges({height: 0xffffffff}, [tx])
 
-    for (let subscription of this.subscriptions.transaction) {
-      subscription.emit('mempool/transaction', tx)
+      for (let subscription of this.subscriptions.transaction) {
+        subscription.emit('mempool/transaction', tx)
+      }
+    } catch (err) {
+      this.logger.error('Mempool Service:', err)
+      this.node.stop()
     }
   }
 
