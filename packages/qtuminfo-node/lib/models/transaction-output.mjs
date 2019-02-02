@@ -17,7 +17,7 @@ export default function generate(sequelize) {
       primaryKey: true
     },
     scriptPubKey: {
-      type: Sequelize.BLOB,
+      type: Sequelize.BLOB('medium'),
       field: 'scriptpubkey',
       allowNull: true
     },
@@ -35,7 +35,7 @@ export default function generate(sequelize) {
       allowNull: true
     },
     scriptSig: {
-      type: Sequelize.BLOB,
+      type: Sequelize.BLOB('medium'),
       field: 'scriptsig',
       allowNull: true
     },
