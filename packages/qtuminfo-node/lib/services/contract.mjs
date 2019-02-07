@@ -27,6 +27,7 @@ export default class ContractService extends Service {
     this.QRC20 = this.node.getModel('qrc20')
     this.QRC20Balance = this.node.getModel('qrc20_balance')
     this.QRC721 = this.node.getModel('qrc721')
+    this.QRC721Token = this.node.getModel('qrc721_token')
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = await this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
@@ -108,7 +109,7 @@ export default class ContractService extends Service {
       WHERE create_height > ${height}
     `)
     let balanceChanges = new Set()
-    let results = await this.ReceiptLog.findAll({
+    let balanceChangeResults = await this.ReceiptLog.findAll({
       where: {topic1: TransferABI.id, topic3: {[$ne]: null}, topic4: null},
       attributes: ['address', 'topic2', 'topic3'],
       include: [{
@@ -119,11 +120,25 @@ export default class ContractService extends Service {
         attributes: []
       }]
     })
-    for (let {address, topic2, topic3} of results) {
+    for (let {address, topic2, topic3} of balanceChangeResults) {
       balanceChanges.add(`${address.toString('hex')}:${topic2.slice(12).toString('hex')}`)
       balanceChanges.add(`${address.toString('hex')}:${topic3.slice(12).toString('hex')}`)
     }
-    await this._updateBalances(balanceChanges)
+    if (balanceChanges.size) {
+      await this._updateBalances(balanceChanges)
+    }
+    await this.db.query(`
+      INSERT INTO qrc721_token
+      SELECT receipt_log.address AS contract_address, receipt_log.topic4 AS token_id, RIGHT(receipt_log.topic2, 20) AS holder
+      FROM receipt, receipt_log
+      INNER JOIN (
+        SELECT address, topic4, MIN(_id) AS _id FROM receipt_log
+        WHERE topic4 IS NOT NULL AND topic1 = 0x${TransferABI.id.toString('hex')}
+        GROUP BY address, topic4
+      ) results ON receipt_log._id = results._id
+      WHERE receipt._id = receipt_log.receipt_id AND receipt.block_height > ${height}
+      ON DUPLICATE KEY UPDATE holder = VALUES(holder)
+    `)
   }
 
   async onSynced() {
@@ -287,6 +302,7 @@ export default class ContractService extends Service {
 
   async _processReceipts(block) {
     let balanceChanges = new Set()
+    let tokenHolders = new Map()
     let totalSupplyChanges = new Set()
     let contractsToCreate = new Set()
     for (let {contractAddress, logs} of block.receipts || []) {
@@ -300,6 +316,8 @@ export default class ContractService extends Service {
           if (topics.length === 3) {
             balanceChanges.add(`${address.toString('hex')}:${sender.toString('hex')}`)
             balanceChanges.add(`${address.toString('hex')}:${receiver.toString('hex')}`)
+          } else if (topics.length === 4) {
+            tokenHolders.set(`${address.toString('hex')}:${topics[3].toString('hex')}`, receiver)
           }
           if (Buffer.compare(sender, Buffer.alloc(20)) === 0 || Buffer.compare(receiver, Buffer.alloc(20)) === 0) {
             totalSupplyChanges.add(address.toString('hex'))
@@ -309,6 +327,9 @@ export default class ContractService extends Service {
     }
     if (balanceChanges.size) {
       await this._updateBalances(balanceChanges)
+    }
+    if (tokenHolders.size) {
+      await this._updateTokenHolders(tokenHolders)
     }
     for (let addressString of totalSupplyChanges) {
       let address = Buffer.from(addressString, 'hex')
@@ -361,6 +382,19 @@ export default class ContractService extends Service {
     if (operations.length) {
       await this.QRC20Balance.bulkCreate(operations, {updateOnDuplicate: ['balance'], validate: false})
     }
+  }
+
+  async _updateTokenHolders(transfers) {
+    let operations = []
+    for (let [key, holder] of transfers.entries()) {
+      let [contract, tokenId] = key.split(':')
+      operations.push({
+        contractAddress: Buffer.from(contract, 'hex'),
+        tokenId: Buffer.from(tokenId, 'hex'),
+        holder
+      })
+    }
+    await this.QRC721Token.bulkCreate(operations, {updateOnDuplicate: ['holder'], validate: false})
   }
 }
 
