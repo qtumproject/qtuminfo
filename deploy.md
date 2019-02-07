@@ -12,7 +12,7 @@
 ## Deploy qtuminfo
 1. `git clone https://github.com/qtumproject/qtuminfo.git && cd qtuminfo`
 2. `npm install`
-3. `mkdir explorer` (you may change the directory name) and write files `package.json` and `qtuminfo-node.json` to it
+3. `mkdir packages/explorer` (you may change the directory name) and write files `package.json` and `qtuminfo-node.json` to it
     ```json
     // package.json
     {
