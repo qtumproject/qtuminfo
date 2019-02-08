@@ -121,8 +121,12 @@ export default class ContractService extends Service {
       }]
     })
     for (let {address, topic2, topic3} of balanceChangeResults) {
-      balanceChanges.add(`${address.toString('hex')}:${topic2.slice(12).toString('hex')}`)
-      balanceChanges.add(`${address.toString('hex')}:${topic3.slice(12).toString('hex')}`)
+      if (Buffer.compare(topic2, Buffer.alloc(32)) !== 0) {
+        balanceChanges.add(`${address.toString('hex')}:${topic2.slice(12).toString('hex')}`)
+      }
+      if (Buffer.compare(topic3, Buffer.alloc(32)) !== 0) {
+        balanceChanges.add(`${address.toString('hex')}:${topic3.slice(12).toString('hex')}`)
+      }
     }
     if (balanceChanges.size) {
       await this._updateBalances(balanceChanges)
@@ -137,6 +141,7 @@ export default class ContractService extends Service {
         GROUP BY address, topic4
       ) results ON receipt_log._id = results._id
       WHERE receipt._id = receipt_log.receipt_id AND receipt.block_height > ${height}
+        AND receipt_log.topic2 != 0x${'0'.repeat(64)}
       ON DUPLICATE KEY UPDATE holder = VALUES(holder)
     `)
   }
@@ -314,10 +319,16 @@ export default class ContractService extends Service {
           let sender = topics[1].slice(12)
           let receiver = topics[2].slice(12)
           if (topics.length === 3) {
-            balanceChanges.add(`${address.toString('hex')}:${sender.toString('hex')}`)
-            balanceChanges.add(`${address.toString('hex')}:${receiver.toString('hex')}`)
+            if (Buffer.compare(sender, Buffer.alloc(20)) !== 0) {
+              balanceChanges.add(`${address.toString('hex')}:${sender.toString('hex')}`)
+            }
+            if (Buffer.compare(receiver, Buffer.alloc(20)) !== 0) {
+              balanceChanges.add(`${address.toString('hex')}:${receiver.toString('hex')}`)
+            }
           } else if (topics.length === 4) {
-            tokenHolders.set(`${address.toString('hex')}:${topics[3].toString('hex')}`, receiver)
+            if (Buffer.compare(receiver, Buffer.alloc(20)) !== 0) {
+              tokenHolders.set(`${address.toString('hex')}:${topics[3].toString('hex')}`, receiver)
+            }
           }
           if (Buffer.compare(sender, Buffer.alloc(20)) === 0 || Buffer.compare(receiver, Buffer.alloc(20)) === 0) {
             totalSupplyChanges.add(address.toString('hex'))
