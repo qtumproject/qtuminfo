@@ -99,13 +99,14 @@ export default class ContractService extends Service {
 
   async onReorg(height) {
     await this.db.query(`
-      DELETE contract, code, tag, qrc20, qrc20_balance, qrc721
+      DELETE contract, code, tag, qrc20, qrc20_balance, qrc721, qrc721_token
       FROM contract
       LEFT JOIN contract_code code ON code.contract_address = contract.address
       LEFT JOIN contract_tag tag ON tag.contract_address = contract.address
       LEFT JOIN qrc20 ON qrc20.contract_address = contract.address
       LEFT JOIN qrc20_balance ON qrc20_balance.contract_address = contract.address
       LEFT JOIN qrc721 ON qrc721.contract_address = contract.address
+      LEFT JOIN qrc721_token ON qrc721_token.contract_address = contract.address
       WHERE create_height > ${height}
     `)
     let balanceChanges = new Set()
@@ -168,8 +169,14 @@ export default class ContractService extends Service {
     if (contractsToRemove.length) {
       let addresses = contractsToRemove.map(address => `0x${address}`).join(', ')
       await this.db.query(`
-        DELETE contract, qrc20_balance FROM contract
-        LEFT JOIN qrc20_balance on qrc20_balance.contract_address = contract.address
+        DELETE contract, code, tag, qrc20, qrc20_balance, qrc721, qrc721_token
+        FROM contract
+        LEFT JOIN contract_code code ON code.contract_address = contract.address
+        LEFT JOIN contract_tag tag ON tag.contract_address = contract.address
+        LEFT JOIN qrc20 ON qrc20.contract_address = contract.address
+        LEFT JOIN qrc20_balance ON qrc20_balance.contract_address = contract.address
+        LEFT JOIN qrc721 ON qrc721.contract_address = contract.address
+        LEFT JOIN qrc721_token ON qrc721_token.contract_address = contract.address
         WHERE contract.address IN ($${addresses})
       `)
     }
