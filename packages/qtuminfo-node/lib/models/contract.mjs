@@ -16,6 +16,7 @@ export default function generate(sequelize) {
       values: ['dgp', 'qrc20', 'qrc721'],
       allowNull: true
     },
+    bytecodeSha256sum: Sequelize.CHAR(32).BINARY,
     description: {
       type: Sequelize.TEXT,
       defaultValue: ''
@@ -36,7 +37,7 @@ export default function generate(sequelize) {
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
   let ContractCode = sequelize.define('contract_code', {
-    contractAddress: {
+    sha256sum: {
       type: Sequelize.CHAR(20).BINARY,
       primaryKey: true
     },

@@ -1,5 +1,5 @@
 import Sequelize from 'sequelize'
-import {Address, Solidity} from 'qtuminfo-lib'
+import {Address, Solidity, Hash} from 'qtuminfo-lib'
 import Service from './base'
 
 const {ne: $ne, gt: $gt, in: $in} = Sequelize.Op
@@ -42,7 +42,8 @@ export default class ContractService extends Service {
       for (let x of [0x80, 0x81, 0x82, 0x83, 0x84]) {
         let dgpAddress = Buffer.alloc(20)
         dgpAddress[19] = x
-        let code = await this.node.getRpcClient().getcontractcode(dgpAddress.toString('hex'))
+        let code = Buffer.from(await this.node.getRpcClient().getcontractcode(dgpAddress.toString('hex')), 'hex')
+        let sha256sum = Hash.sha256(code)
         await this.Contract.create({
           address: dgpAddress,
           addressString: new Address({
@@ -52,13 +53,11 @@ export default class ContractService extends Service {
           }).toString(),
           vm: 'evm',
           type: 'dgp',
+          bytecodeSha256sum: sha256sum,
           owner: '0',
           createHeight: 0
         })
-        await this.ContractCode.create({
-          contractAddress: dgpAddress,
-          code: Buffer.from(code, 'hex')
-        })
+        await this.ContractCode.bulkCreate([{sha256sum, code}], {ignoreDuplicates: true})
         await this.ContractTag.create({
           contractAddress: dgpAddress,
           tag: 'dgp'
@@ -99,9 +98,8 @@ export default class ContractService extends Service {
 
   async onReorg(height) {
     await this.db.query(`
-      DELETE contract, code, tag, qrc20, qrc20_balance, qrc721, qrc721_token
+      DELETE contract, tag, qrc20, qrc20_balance, qrc721, qrc721_token
       FROM contract
-      LEFT JOIN contract_code code ON code.contract_address = contract.address
       LEFT JOIN contract_tag tag ON tag.contract_address = contract.address
       LEFT JOIN qrc20 ON qrc20.contract_address = contract.address
       LEFT JOIN qrc20_balance ON qrc20_balance.contract_address = contract.address
@@ -169,9 +167,8 @@ export default class ContractService extends Service {
     if (contractsToRemove.length) {
       let addresses = contractsToRemove.map(address => `0x${address}`).join(', ')
       await this.db.query(`
-        DELETE contract, code, tag, qrc20, qrc20_balance, qrc721, qrc721_token
+        DELETE contract, tag, qrc20, qrc20_balance, qrc721, qrc721_token
         FROM contract
-        LEFT JOIN contract_code code ON code.contract_address = contract.address
         LEFT JOIN contract_tag tag ON tag.contract_address = contract.address
         LEFT JOIN qrc20 ON qrc20.contract_address = contract.address
         LEFT JOIN qrc20_balance ON qrc20_balance.contract_address = contract.address
@@ -196,6 +193,7 @@ export default class ContractService extends Service {
     } catch (err) {
       return
     }
+    let sha256sum = Hash.sha256(code)
     contract = new this.Contract({
       address,
       addressString: new Address({
@@ -204,6 +202,7 @@ export default class ContractService extends Service {
         chain: this.chain
       }).toString(),
       vm,
+      bytecodeSha256sum: sha256sum,
       ...ownerId
         ? {
           ownerId,
@@ -226,7 +225,7 @@ export default class ContractService extends Service {
         ])
         contract.type = 'qrc721'
         await contract.save()
-        await this.ContractCode.create({contractAddress: address, code})
+        await this.ContractCode.bulkCreate([{sha256sum, code}], {ignoreDuplicates: true})
         await this.ContractTag.create({contractAddress: address, tag: 'qrc721'})
         await this.QRC721.create({
           contractAddress: address,
@@ -260,7 +259,7 @@ export default class ContractService extends Service {
         ])
         contract.type = 'qrc20'
         await contract.save()
-        await this.ContractCode.create({contractAddress: address, code})
+        await this.ContractCode.bulkCreate([{sha256sum, code}], {ignoreDuplicates: true})
         await this.ContractTag.create({contractAddress: address, tag: 'qrc20'})
         await this.QRC20.create({
           contractAddress: address,
@@ -275,6 +274,7 @@ export default class ContractService extends Service {
       }
     } else {
       await contract.save()
+      await this.ContractCode.bulkCreate([{sha256sum, code}], {ignoreDuplicates: true})
     }
     return contract
   }

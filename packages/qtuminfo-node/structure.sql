@@ -38,19 +38,21 @@ CREATE TABLE `contract` (
   `address_string` char(40) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
   `vm` enum('evm','x86') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   `type` enum('dgp','qrc20','qrc721') CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL,
+  `bytecode_sha256sum` binary(32) NOT NULL,
   `description` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `owner_id` bigint(20) unsigned NOT NULL,
   `create_transaction_id` varbinary(32) DEFAULT NULL,
   `create_height` int(10) unsigned DEFAULT NULL,
   PRIMARY KEY (`address`),
-  UNIQUE KEY `address` (`address_string`)
+  UNIQUE KEY `address` (`address_string`),
+  KEY `bytecode` (`bytecode_sha256sum`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `contract_code` (
-  `contract_address` binary(20) NOT NULL,
+  `sha256sum` binary(32) NOT NULL,
   `code` mediumblob NOT NULL,
   `source` longtext COLLATE utf8mb4_unicode_ci,
-  PRIMARY KEY (`contract_address`)
+  PRIMARY KEY (`sha256sum`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `contract_spend` (
