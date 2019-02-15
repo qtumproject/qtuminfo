@@ -2,7 +2,7 @@
 
 ## Prerequisites
 * node.js v10.5+
-* mongodb v3.6+
+* mongodb v4.0+
 
 ## Deploy qtum core
 1. `git clone --recursive https://github.com/xuanyan0x7c7/qtum.git`
