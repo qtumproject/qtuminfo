@@ -89,10 +89,6 @@ export default class TransactionService extends Service {
     )
     await this.TransactionOutput.update({outputHeight: 0xffffffff}, {where: {outputHeight: {[$gt]: height}}})
     await this.TransactionOutput.update({inputHeight: 0xffffffff}, {where: {inputHeight: {[$gt]: height}}})
-    await this.BalanceChange.update(
-      {blockHeight: 0xffffffff, indexInBlock: 0xffffffff},
-      {where: {blockHeight: {[$gt]: height}}}
-    )
     await this.db.query(`
       UPDATE balance_change balance, transaction tx
       SET balance.block_height = 0xffffffff, balance.index_in_block = 0xffffffff
