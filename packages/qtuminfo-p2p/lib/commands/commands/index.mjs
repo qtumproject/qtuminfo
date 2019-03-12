@@ -1,6 +1,7 @@
 import AddrMessage from './addr'
 import BlockMessage from './block'
 import FeeFilterMessage from './feefilter'
+import GetAddrMessage from './getaddr'
 import GetBlocksMessage from './getblocks'
 import GetDataMessage from './getdata'
 import GetHeadersMessage from './getheaders'
@@ -20,6 +21,7 @@ export const messageMap = {
   addr: AddrMessage,
   block: BlockMessage,
   feefilter: FeeFilterMessage,
+  getaddr: GetAddrMessage,
   getblocks: GetBlocksMessage,
   getdata: GetDataMessage,
   getheaders: GetHeadersMessage,

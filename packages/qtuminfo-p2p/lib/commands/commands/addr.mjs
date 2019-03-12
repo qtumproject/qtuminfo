@@ -26,6 +26,7 @@ export default class AddrMessage extends Message {
       let timestamp = reader.readUInt32LE()
       let address = parseAddress(reader)
       address.timestamp = timestamp
+      this.addresses.push(address)
     }
     Message.checkFinished(reader)
   }

@@ -22,7 +22,7 @@ export function writeIP(writer, ip) {
 export function parseAddress(reader) {
   let services = reader.readUInt64LE()
   let ip = parseIP(reader)
-  let port = reader.readUInt16LE()
+  let port = reader.readUInt16BE()
   return {services, ip, port}
 }
 
@@ -30,7 +30,7 @@ export function writeAddress(writer, address) {
   if (address) {
     writer.writeUInt64LE(address.services)
     writeIP(writer, address.ip)
-    writer.writeUInt16LE(address.port)
+    writer.writeUInt16BE(address.port)
   } else {
     writer.write(Buffer.alloc(26))
   }
