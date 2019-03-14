@@ -12,13 +12,16 @@ export default function generate(sequelize) {
     totalSupply: {
       type: Sequelize.CHAR(32).BINARY,
       get() {
-        return BigInt(`0x${this.getDataValue('totalSupply').toString('hex')}`)
+        let totalSupply = this.getDataValue('totalSupply')
+        return totalSupply == null ? null : BigInt(`0x${totalSupply.toString('hex')}`)
       },
-      set(value) {
-        return this.setDataValue(
-          'totalSupply',
-          Buffer.from(value.toString(16).padStart(64, '0'), 'hex')
-        )
+      set(totalSupply) {
+        if (totalSupply != null) {
+          this.setDataValue(
+            'totalSupply',
+            Buffer.from(totalSupply.toString(16).padStart(64, '0'), 'hex')
+          )
+        }
       }
     },
     version: {
@@ -39,13 +42,16 @@ export default function generate(sequelize) {
     balance: {
       type: Sequelize.CHAR(32).BINARY,
       get() {
-        return BigInt(`0x${this.getDataValue('balance').toString('hex')}`)
+        let balance = this.getDataValue('balance')
+        return balance == null ? null : BigInt(`0x${balance.toString('hex')}`)
       },
-      set(value) {
-        return this.setDataValue(
-          'balance',
-          Buffer.from(value.toString(16).padStart(64, '0'), 'hex')
-        )
+      set(balance) {
+        if (balance != null) {
+          this.setDataValue(
+            'balance',
+            Buffer.from(balance.toString(16).padStart(64, '0'), 'hex')
+          )
+        }
       }
     }
   }, {freezeTableName: true, underscored: true, timestamps: false})
@@ -60,13 +66,16 @@ export default function generate(sequelize) {
     totalSupply: {
       type: Sequelize.CHAR(32).BINARY,
       get() {
-        return BigInt(`0x${this.getDataValue('totalSupply').toString('hex')}`)
+        let totalSupply = this.getDataValue('totalSupply')
+        return totalSupply == null ? null : BigInt(`0x${totalSupply.toString('hex')}`)
       },
-      set(value) {
-        return this.setDataValue(
-          'totalSupply',
-          Buffer.from(value.toString(16).padStart(64, '0'), 'hex')
-        )
+      set(totalSupply) {
+        if (totalSupply != null) {
+          this.setDataValue(
+            'totalSupply',
+            Buffer.from(totalSupply.toString(16).padStart(64, '0'), 'hex')
+          )
+        }
       }
     }
   }, {freezeTableName: true, underscored: true, timestamps: false})

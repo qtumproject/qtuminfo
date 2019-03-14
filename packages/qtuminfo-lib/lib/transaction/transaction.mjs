@@ -36,7 +36,7 @@ export default class Transaction {
   }
 
   static fromBufferReader(reader) {
-    let version = reader.readUInt32LE()
+    let version = reader.readInt32LE()
     let inputs = []
     let flag = 0
     let outputs = []

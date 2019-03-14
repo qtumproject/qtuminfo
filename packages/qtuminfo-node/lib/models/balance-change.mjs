@@ -19,7 +19,9 @@ export default function generate(sequelize) {
         return value == null ? null : BigInt(value)
       },
       set(value) {
-        return this.setDataValue('value', value.toString())
+        if (value != null) {
+          this.setDataValue('value', value.toString())
+        }
       }
     }
   }, {freezeTableName: true, underscored: true, timestamps: false})

@@ -347,13 +347,13 @@ export default class TransactionService extends Service {
         `input_height = ${block.height}`
       ]
     }
-    await this.db.query(`
-      INSERT INTO balance_change (transaction_id, block_height, index_in_block, address_id, value)
+
+    let result = await this.db.query(`
       SELECT
-        tx._id AS transaction_id,
-        tx.block_height AS block_height,
-        tx.index_in_block AS index_in_block,
-        block_balance.address_id AS address_id,
+        tx._id AS transactionId,
+        tx.block_height AS blockHeight,
+        tx.index_in_block AS indexInBlock,
+        block_balance.address_id AS addressId,
         SUM(block_balance.value) AS value
       FROM (
         SELECT output_transaction_id AS transaction_id, address_id, value
@@ -366,7 +366,17 @@ export default class TransactionService extends Service {
       ) AS block_balance
       LEFT JOIN transaction tx ON tx.id = block_balance.transaction_id
       GROUP BY tx._id, block_balance.address_id
-    `)
+    `, {type: this.db.QueryTypes.SELECT})
+    await this.BalanceChange.bulkCreate(
+      result.map(item => ({
+        transactionId: item.transactionId,
+        blockHeight: item.blockHeight,
+        indexInBlock: item.indexInBlock,
+        addressId: item.addressId,
+        value: item.value
+      })),
+      {validate: false}
+    )
   }
 
   async _processContracts(block) {
