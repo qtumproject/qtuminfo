@@ -174,7 +174,7 @@ export default class ContractService extends Service {
         LEFT JOIN qrc20_balance ON qrc20_balance.contract_address = contract.address
         LEFT JOIN qrc721 ON qrc721.contract_address = contract.address
         LEFT JOIN qrc721_token ON qrc721_token.contract_address = contract.address
-        WHERE contract.address IN ($${addresses})
+        WHERE contract.address IN (${addresses})
       `)
     }
     for (let address of contractsToCreate) {
