@@ -10,8 +10,8 @@ export default class P2PService extends Service {
     this._initP2P()
     this._initPubSub()
     this._currentBestHeight = null
-    this._outgoingTransactions = LRU(100)
-    this._blockCache = options.blockCacheCount || LRU({max: 10, maxAge: 5 * 60 * 1000})
+    this._outgoingTransactions = new LRU(100)
+    this._blockCache = options.blockCacheCount || new LRU({max: 10, maxAge: 5 * 60 * 1000})
   }
 
   static get dependencies() {
@@ -123,7 +123,7 @@ export default class P2PService extends Service {
   }
 
   _initCache() {
-    this._inventories = LRU(1000)
+    this._inventories = new LRU(1000)
   }
 
   _initP2P() {
