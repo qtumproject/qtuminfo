@@ -104,18 +104,15 @@ export class EventABI {
   }
 }
 
-export const qrc20ABIs = qrc20List.map(abi => {
-  if (abi.type === 'function') {
-    return new MethodABI(abi)
-  } else if (abi.type === 'event') {
-    return new EventABI(abi)
-  }
-})
+function transformABIList(abiList) {
+  return abiList.map(abi => {
+    if (abi.type === 'function') {
+      return new MethodABI(abi)
+    } else if (abi.type === 'event') {
+      return new EventABI(abi)
+    }
+  })
+}
 
-export const qrc721ABIs = qrc721List.map(abi => {
-  if (abi.type === 'function') {
-    return new MethodABI(abi)
-  } else if (abi.type === 'event') {
-    return new EventABI(abi)
-  }
-})
+export const qrc20ABIs = transformABIList(qrc20List)
+export const qrc721ABIs = transformABIList(qrc721List)

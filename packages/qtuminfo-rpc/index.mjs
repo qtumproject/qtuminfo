@@ -108,19 +108,13 @@ RpcClient.config = {logger: 'normal'}
 
 const callspec = {
   callcontract: '',
-  estimatefee: 'int',
-  estimatepriority: 'int',
   estimatesmartfee: 'int',
-  estimatesmartpriority: 'int',
   getcontractcode: '',
-  getstakinginfo: '',
+  getdgpinfo: '',
   getstorage: '',
   gettransactionreceipt: '',
   listcontracts: 'int int',
-  preciousblock: '',
-  searchlogs: 'int int',
-  sendrawtransaction: '',
-  waitforlogs: ''
+  sendrawtransaction: ''
 }
 
 function getRandomId() {
