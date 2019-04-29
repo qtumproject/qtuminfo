@@ -94,7 +94,7 @@ export default class TransactionService extends Service {
       SET balance.block_height = 0xffffffff, balance.index_in_block = 0xffffffff
       WHERE balance.transaction_id = tx._id AND tx.block_height > ${height}
     `)
-    await this.Address.update({createHeight: 0xffffffff}, {where: {createHeight: {[$gt]: height}}})
+    await this.Address.update({createHeight: 0xffffffff, createIndex: 0xffffffff}, {where: {createHeight: {[$gt]: height}}})
   }
 
   async onBlock(block) {
@@ -241,6 +241,7 @@ export default class TransactionService extends Service {
               data: address.data,
               string: address.toString(),
               createHeight: block.height,
+              createIndex: index,
               indexes: [[index, outputIndex]]
             })
           }
@@ -265,8 +266,8 @@ export default class TransactionService extends Service {
       }
     }
     let newAddressItems = []
-    for (let {type, data, string, createHeight} of addressMap.values()) {
-      newAddressItems.push({type, data, string, createHeight})
+    for (let {type, data, string, createHeight, createIndex} of addressMap.values()) {
+      newAddressItems.push({type, data, string, createHeight, createIndex})
     }
 
     for (let {_id, type, data} of await this.Address.bulkCreate(newAddressItems, {validate: false})) {

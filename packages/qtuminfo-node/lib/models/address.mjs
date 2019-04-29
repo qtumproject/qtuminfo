@@ -22,6 +22,7 @@ export default function generate(sequelize) {
       unique: 'address'
     },
     string: Sequelize.STRING(64),
-    createHeight: Sequelize.INTEGER.UNSIGNED
+    createHeight: Sequelize.INTEGER.UNSIGNED,
+    createIndex: Sequelize.INTEGER.UNSIGNED
   }, {freezeTableName: true, underscored: true, timestamps: false})
 }
