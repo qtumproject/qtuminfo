@@ -378,6 +378,17 @@ export default class TransactionService extends Service {
       })),
       {validate: false}
     )
+    if (transactions && block.height < 0xffffffff) {
+      await this.db.query(`
+        UPDATE address SET create_index = (
+          SELECT index_in_block FROM balance_change
+          WHERE address_id = address._id
+          ORDER BY block_height ASC, index_in_block ASC
+          LIMIT 1
+        )
+        WHERE create_height = ${block.height}
+      `)
+    }
   }
 
   async _processContracts(block) {
