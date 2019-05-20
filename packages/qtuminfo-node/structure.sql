@@ -4,10 +4,11 @@ CREATE TABLE `address` (
   `data` varbinary(32) NOT NULL,
   `string` varchar(64) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
   `create_height` int(10) unsigned NOT NULL,
+  `create_index` int(10) unsigned NOT NULL,
   PRIMARY KEY (`_id`),
   UNIQUE KEY `address` (`data`,`type`),
-  UNIQUE KEY `string` (`string`),
-  KEY `create_height` (`create_height`)
+  UNIQUE KEY `string` (`string`) USING BTREE,
+  KEY `create_height` (`create_height`,`create_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `balance_change` (
