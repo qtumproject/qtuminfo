@@ -28,7 +28,7 @@ export default class Transaction {
   }
 
   get weight() {
-    return this.toBuffer().length * 3 + this.toHashBuffer().length
+    return this.toBuffer().length + this.toHashBuffer().length * 3
   }
 
   static fromBuffer(buffer) {
