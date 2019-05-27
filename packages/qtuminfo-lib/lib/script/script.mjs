@@ -10,8 +10,8 @@ const types = {
   PUBKEY_IN: 'Spend from public key',
   PUBKEYHASH_OUT: 'Pay to public key hash',
   PUBKEYHASH_IN: 'Spend from public key hash',
-  SCRIPT_OUT: 'Pay to script hash',
-  SCRIPT_IN: 'Spend from script hash',
+  SCRIPTHASH_OUT: 'Pay to script hash',
+  SCRIPTHASH_IN: 'Spend from script hash',
   MULTISIG_OUT: 'Pay to multisig',
   MULTISIG_IN: 'Spend from multisig',
   DATA_OUT: 'Data push',
@@ -284,7 +284,7 @@ export default class Script {
     if (this._isOutput) {
       return this._classifyOutput()
     } else if (this._isInput) {
-      return this._classifyOutput()
+      return this._classifyInput()
     } else {
       return types.UNKNOWN
     }
