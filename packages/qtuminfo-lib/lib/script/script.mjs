@@ -212,11 +212,11 @@ export default class Script {
     if (this.chunks.length <= 1) {
       return false
     }
-    let redeemBuffer = this.chunks[this.chunks.length - 1]
+    let redeemBuffer = this.chunks[this.chunks.length - 1].buffer
     if (!redeemBuffer) {
       return false
     }
-    let redeemScript = Script.fromBuffer(redeemBuffer)
+    let redeemScript = Script.fromBuffer(redeemBuffer, {isOutput: true})
     return redeemScript.isStandard()
   }
 
