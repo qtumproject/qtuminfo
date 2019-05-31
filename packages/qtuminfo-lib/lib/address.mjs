@@ -60,6 +60,7 @@ export default class Address {
         chain
       })
     case Script.EVM_CONTRACT_CREATE:
+    case Script.EVM_CONTRACT_CREATE_SENDER:
       return new Address({
         type: types.EVM_CONTRACT,
         data: Hash.sha256ripemd160(
@@ -71,6 +72,12 @@ export default class Address {
       return new Address({
         type: types.EVM_CONTRACT,
         data: script.chunks[4].buffer,
+        chain
+      })
+    case Script.EVM_CONTRACT_CALL_SENDER:
+      return new Address({
+        type: types.EVM_CONTRACT,
+        data: script.chunks[8].buffer,
         chain
       })
     case Script.CONTRACT_OUT:

@@ -1,6 +1,6 @@
 import assert from 'assert'
 import Sequelize from 'sequelize'
-import {Address} from 'qtuminfo-lib'
+import {Address, Script} from 'qtuminfo-lib'
 import Service from './base'
 
 const {gt: $gt, in: $in} = Sequelize.Op
@@ -25,8 +25,8 @@ export default class TransactionService extends Service {
     this.BalanceChange = this.node.getModel('balance_change')
     this.GasRefund = this.node.getModel('gas_refund')
     this.ContractSpend = this.node.getModel('contract_spend')
-    this.Receipt = this.node.getModel('receipt')
-    this.ReceiptLog = this.node.getModel('receipt_log')
+    this.EVMReceipt = this.node.getModel('evm_receipt')
+    this.EVMReceiptLog = this.node.getModel('evm_receipt_log')
     this._tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
     if (this._tip.height > blockTip.height) {
@@ -47,8 +47,8 @@ export default class TransactionService extends Service {
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
       LEFT JOIN transaction_output txo ON txo.output_transaction_id = tx.id
-      LEFT JOIN receipt ON receipt.transaction_id = tx._id
-      LEFT JOIN receipt_log log ON log.receipt_id = receipt._id
+      LEFT JOIN evm_receipt receipt ON receipt.transaction_id = tx._id
+      LEFT JOIN evm_receipt_log log ON log.receipt_id = receipt._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
@@ -68,8 +68,8 @@ export default class TransactionService extends Service {
     await this.db.query(`
       DELETE receipt, log, refund, contract_spend
       FROM transaction tx
-      LEFT JOIN receipt ON receipt.transaction_id = tx._id
-      LEFT JOIN receipt_log log ON log.receipt_id = receipt._id
+      LEFT JOIN evm_receipt receipt ON receipt.transaction_id = tx._id
+      LEFT JOIN evm_receipt_log log ON log.receipt_id = receipt._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
       WHERE tx.block_height > ${height}
@@ -234,7 +234,7 @@ export default class TransactionService extends Service {
           let key = `${address.data.toString('hex')}/${address.type}`
           let addressItem = addressMap.get(key)
           if (addressItem) {
-            addressItem.indexes.push([index, outputIndex])
+            addressItem.indices.push([index, outputIndex])
           } else {
             addressMap.set(key, {
               type: address.type,
@@ -242,7 +242,7 @@ export default class TransactionService extends Service {
               string: address.toString(),
               createHeight: block.height,
               createIndex: index,
-              indexes: [[index, outputIndex]]
+              indices: [[index, outputIndex]]
             })
           }
         }
@@ -250,16 +250,16 @@ export default class TransactionService extends Service {
     }
     let addressItems = []
     for (let {type, data} of addressMap.values()) {
-      addressItems.push(`('${type}', 0x${data.toString('hex')})`)
+      addressItems.push(`(${this.Address.parseType(type)}, 0x${data.toString('hex')})`)
     }
     if (addressItems.length) {
       for (let {_id, type, data} of await this.db.query(`
         SELECT _id, type, data FROM address
         WHERE (type, data) IN (${addressItems.join(', ')})
       `, {type: this.db.QueryTypes.SELECT})) {
-        let key = `${data.toString('hex')}/${type}`
+        let key = `${data.toString('hex')}/${this.Address.getType(type)}`
         let item = addressMap.get(key)
-        for (let [index, outputIndex] of item.indexes) {
+        for (let [index, outputIndex] of item.indices) {
           addressIds[index][outputIndex] = _id
         }
         addressMap.delete(key)
@@ -273,7 +273,7 @@ export default class TransactionService extends Service {
     for (let {_id, type, data} of await this.Address.bulkCreate(newAddressItems, {validate: false})) {
       let key = `${data.toString('hex')}/${type}`
       let item = addressMap.get(key)
-      for (let [index, outputIndex] of item.indexes) {
+      for (let [index, outputIndex] of item.indices) {
         addressIds[index][outputIndex] = _id
       }
     }
@@ -447,13 +447,19 @@ export default class TransactionService extends Service {
       },
       attributes: ['outputIndex', 'value', 'addressId']
     })
-    let senderMap = new Map((await this.TransactionOutput.findAll({
+    let refunderMap = new Map((await this.TransactionOutput.findAll({
       where: {
         inputTxId: {[$in]: receiptIndices.map(index => block.transactions[index].id)},
         inputIndex: 0
       },
-      attributes: ['inputTxId', 'addressId']
-    })).map(item => [item.inputTxId.toString('hex'), item.addressId]))
+      attributes: ['inputTxId', 'addressId'],
+      include: [{
+        model: this.Address,
+        as: 'address',
+        required: true,
+        attributes: ['_id', 'type', 'data']
+      }]
+    })).map(item => [item.inputTxId.toString('hex'), {_id: item.address._id, type: item.address.type, data: item.address.data}]))
     let receiptIndex = -1
     for (let index = 0; index < receiptIndices.length; ++index) {
       let indexInBlock = receiptIndices[index]
@@ -466,6 +472,22 @@ export default class TransactionService extends Service {
       }
       for (let i = 0; i < indices.length; ++i) {
         let output = tx.outputs[indices[i]]
+        let sender
+        let refunder = refunderMap.get(tx.id.toString('hex'))
+        if (output.scriptPubKey.isEVMContractCreate() || output.scriptPubKey.isEVMContractCall()) {
+          sender = new Address({type: refunder.type, data: refunder.data, chain: this.chain})
+        } else {
+          sender = new Address({
+            type: [
+              Address.PAY_TO_PUBLIC_KEY_HASH,
+              Address.PAY_TO_SCRIPT_HASH,
+              Address.PAY_TO_WITNESS_SCRIPT_HASH,
+              Address.PAY_TO_WITNESS_KEY_HASH
+            ][Script.parseNumberChunk(output.scriptPubKey.chunks[0])],
+            data: output.scriptPubKey.chunks[1],
+            chain: this.chain
+          })
+        }
         let {gasUsed, contractAddress, excepted, log: logs} = blockReceipts[index][i]
         if (excepted !== 'Unknown') {
           let gasLimit = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[1].buffer, 'hex')
@@ -478,8 +500,7 @@ export default class TransactionService extends Service {
           }`)
           let refundValue = gasPrice * (gasLimit - BigInt(gasUsed))
           if (refundValue) {
-            let sender = senderMap.get(tx.id.toString('hex'))
-            let txoIndex = refundTxos.findIndex(txo => txo.value === refundValue && txo.addressId === sender)
+            let txoIndex = refundTxos.findIndex(txo => txo.value === refundValue && txo.addressId === refunder._id)
             if (txoIndex === -1) {
               this.logger.error(`Contract Service: cannot find refund output: ${tx.id.toString('hex')}`)
             } else {
@@ -499,6 +520,8 @@ export default class TransactionService extends Service {
           blockHeight: block.height,
           indexInBlock,
           outputIndex: indices[i],
+          senderType: sender.type,
+          senderData: sender.data,
           gasUsed,
           contractAddress: Buffer.from(contractAddress, 'hex'),
           excepted
@@ -519,11 +542,11 @@ export default class TransactionService extends Service {
       }
     }
     await this.GasRefund.bulkCreate(gasRefunds, {validate: false})
-    let newReceipts = await this.Receipt.bulkCreate(receipts, {validate: false})
+    let newReceipts = await this.EVMReceipt.bulkCreate(receipts, {validate: false})
     for (let log of receiptLogs) {
       log.receiptId = newReceipts[log.receiptId]._id
     }
-    await this.ReceiptLog.bulkCreate(receiptLogs, {validate: false})
+    await this.EVMReceiptLog.bulkCreate(receiptLogs, {validate: false})
   }
 
   async removeReplacedTransactions(tx) {

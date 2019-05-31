@@ -1,5 +1,5 @@
 import Sequelize from 'sequelize'
-import {Address, Solidity, Hash} from 'qtuminfo-lib'
+import {Address, Script, Solidity, Hash} from 'qtuminfo-lib'
 import Service from './base'
 
 const {ne: $ne, gt: $gt, in: $in} = Sequelize.Op
@@ -19,8 +19,8 @@ export default class ContractService extends Service {
     this.db = this.node.getDatabase()
     this.Address = this.node.getModel('address')
     this.TransactionOutput = this.node.getModel('transaction_output')
-    this.Receipt = this.node.getModel('receipt')
-    this.ReceiptLog = this.node.getModel('receipt_log')
+    this.EVMReceipt = this.node.getModel('evm_receipt')
+    this.EVMReceiptLog = this.node.getModel('evm_receipt_log')
     this.Contract = this.node.getModel('contract')
     this.ContractCode = this.node.getModel('contract_code')
     this.ContractTag = this.node.getModel('contract_tag')
@@ -54,7 +54,6 @@ export default class ContractService extends Service {
           vm: 'evm',
           type: 'dgp',
           bytecodeSha256sum: sha256sum,
-          owner: '0',
           createHeight: 0
         })
         await this.ContractCode.bulkCreate([{sha256sum, code}], {ignoreDuplicates: true})
@@ -77,10 +76,26 @@ export default class ContractService extends Service {
               model: this.Address,
               as: 'address',
               required: true,
-              attributes: ['_id', 'data']
+              attributes: ['data']
             }]
           })
-          let contract = await this._createContract(address, 'evm', {transaction, block, ownerId: owner._id})
+          let contract = await this._createContract(address, 'evm')
+          if (contract && contract.type === 'qrc20') {
+            await this._updateBalances(new Set([`${address.toString('hex')}:${owner.data.toString('hex')}`]))
+          }
+        } else if (output.scriptPubKey.isEVMContractCreateBySender()) {
+          let address = Address.fromScript(output.scriptPubKey, this.chain, transaction.id, i).data
+          let owner = new Address({
+            type: [
+              Address.PAY_TO_PUBLIC_KEY_HASH,
+              Address.PAY_TO_SCRIPT_HASH,
+              Address.PAY_TO_WITNESS_SCRIPT_HASH,
+              Address.PAY_TO_WITNESS_KEY_HASH
+            ][Script.parseNumberChunk(output.scriptPubKey.chunks[0])],
+            data: output.scriptPubKey.chunks[1],
+            chain: this.chain
+          })
+          let contract = await this._createContract(address, 'evm')
           if (contract && contract.type === 'qrc20') {
             await this._updateBalances(new Set([`${address.toString('hex')}:${owner.data.toString('hex')}`]))
           }
@@ -97,22 +112,12 @@ export default class ContractService extends Service {
   }
 
   async onReorg(height) {
-    await this.db.query(`
-      DELETE contract, tag, qrc20, qrc20_balance, qrc721, qrc721_token
-      FROM contract
-      LEFT JOIN contract_tag tag ON tag.contract_address = contract.address
-      LEFT JOIN qrc20 ON qrc20.contract_address = contract.address
-      LEFT JOIN qrc20_balance ON qrc20_balance.contract_address = contract.address
-      LEFT JOIN qrc721 ON qrc721.contract_address = contract.address
-      LEFT JOIN qrc721_token ON qrc721_token.contract_address = contract.address
-      WHERE create_height > ${height}
-    `)
     let balanceChanges = new Set()
-    let balanceChangeResults = await this.ReceiptLog.findAll({
+    let balanceChangeResults = await this.EVMReceiptLog.findAll({
       where: {topic1: TransferABI.id, topic3: {[$ne]: null}, topic4: null},
       attributes: ['address', 'topic2', 'topic3'],
       include: [{
-        model: this.Receipt,
+        model: this.EVMReceipt,
         as: 'receipt',
         required: true,
         where: {blockHeight: {[$gt]: height}},
@@ -132,15 +137,15 @@ export default class ContractService extends Service {
     }
     await this.db.query(`
       INSERT INTO qrc721_token
-      SELECT receipt_log.address AS contract_address, receipt_log.topic4 AS token_id, RIGHT(receipt_log.topic2, 20) AS holder
-      FROM receipt, receipt_log
+      SELECT log.address AS contract_address, log.topic4 AS token_id, RIGHT(log.topic2, 20) AS holder
+      FROM evm_receipt receipt, evm_receipt_log log
       INNER JOIN (
-        SELECT address, topic4, MIN(_id) AS _id FROM receipt_log
+        SELECT address, topic4, MIN(_id) AS _id FROM evm_receipt_log
         WHERE topic4 IS NOT NULL AND topic1 = 0x${TransferABI.id.toString('hex')}
         GROUP BY address, topic4
-      ) results ON receipt_log._id = results._id
-      WHERE receipt._id = receipt_log.receipt_id AND receipt.block_height > ${height}
-        AND receipt_log.topic2 != 0x${'0'.repeat(64)}
+      ) results ON log._id = results._id
+      WHERE receipt._id = log.receipt_id AND receipt.block_height > ${height}
+        AND log.topic2 != 0x${'0'.repeat(64)}
       ON DUPLICATE KEY UPDATE holder = VALUES(holder)
     `)
   }
@@ -182,7 +187,7 @@ export default class ContractService extends Service {
     }
   }
 
-  async _createContract(address, vm, {transaction, block, ownerId} = {}) {
+  async _createContract(address, vm) {
     let contract = await this.Contract.findOne({where: {address}})
     if (contract) {
       return contract
@@ -202,14 +207,7 @@ export default class ContractService extends Service {
         chain: this.chain
       }).toString(),
       vm,
-      bytecodeSha256sum: sha256sum,
-      ...ownerId
-        ? {
-          ownerId,
-          createTxId: transaction.id,
-          createHeight: block.height
-        }
-        : {}
+      bytecodeSha256sum: sha256sum
     })
     if (isQRC721(code)) {
       let [nameResult, symbolResult, totalSupplyResult] = await this._batchCallMethods([

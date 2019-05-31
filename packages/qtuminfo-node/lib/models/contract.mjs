@@ -20,19 +20,6 @@ export default function generate(sequelize) {
     description: {
       type: Sequelize.TEXT,
       defaultValue: ''
-    },
-    ownerId: {
-      type: Sequelize.BIGINT.UNSIGNED,
-      defaultValue: '0'
-    },
-    createTxId: {
-      type: Sequelize.STRING(32).BINARY,
-      field: 'create_transaction_id',
-      allowNull: true
-    },
-    createHeight: {
-      type: Sequelize.INTEGER.UNSIGNED,
-      allowNull: true
     }
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
@@ -58,8 +45,6 @@ export default function generate(sequelize) {
     tag: Sequelize.STRING(32)
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
-  sequelize.models.address.hasOne(Contract, {as: 'createdContracts', foreignKey: 'ownerId'})
-  Contract.belongsTo(sequelize.models.address, {as: 'owner', foreignKey: 'ownerId'})
   Contract.hasOne(ContractCode, {as: 'code', foreignKey: 'contractAddress'})
   ContractCode.belongsTo(Contract, {as: 'contract', foreignKey: 'contractAddress'})
   Contract.hasMany(ContractTag, {as: 'tags', foreignKey: 'contractAddress'})

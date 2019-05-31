@@ -1,7 +1,28 @@
 import Sequelize from 'sequelize'
 
+/* eslint-disable camelcase */
+const addressTypes = {
+  pubkeyhash: 1,
+  scripthash: 2,
+  witness_v0_keyhash: 3,
+  witness_v0_scripthash: 4,
+  contract: 0x80,
+  evm_contract: 0x81,
+  x86_contract: 0x82
+}
+/* eslint-enable camelcase*/
+const addressTypeMap = {
+  1: 'pubkeyhash',
+  2: 'scripthash',
+  3: 'witness_v0_keyhash',
+  4: 'witness_v0_scripthash',
+  0x80: 'contract',
+  0x81: 'evm_contract',
+  0x82: 'x86_contract'
+}
+
 export default function generate(sequelize) {
-  let Receipt = sequelize.define('receipt', {
+  let EVMReceipt = sequelize.define('evm_receipt', {
     _id: {
       type: Sequelize.BIGINT.UNSIGNED,
       field: '_id',
@@ -18,6 +39,19 @@ export default function generate(sequelize) {
       type: Sequelize.INTEGER.UNSIGNED,
       unique: 'transaction'
     },
+    senderType: {
+      type: Sequelize.INTEGER(3).UNSIGNED,
+      get() {
+        let senderType = this.getDataValue('senderType')
+        return addressTypeMap[senderType] || null
+      },
+      set(senderType) {
+        if (senderType != null) {
+          this.setDataValue('senderType', addressTypes[senderType] || 0)
+        }
+      }
+    },
+    senderData: Sequelize.STRING(32).BINARY,
     gasUsed: Sequelize.INTEGER.UNSIGNED,
     contractAddress: Sequelize.CHAR(20).BINARY,
     excepted: {
@@ -30,7 +64,7 @@ export default function generate(sequelize) {
     }
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
-  let ReceiptLog = sequelize.define('receipt_log', {
+  let EVMReceiptLog = sequelize.define('evm_receipt_log', {
     _id: {
       type: Sequelize.BIGINT.UNSIGNED,
       field: '_id',
@@ -47,8 +81,8 @@ export default function generate(sequelize) {
     data: Sequelize.BLOB
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
-  sequelize.models.transaction.hasMany(Receipt, {as: 'receipts', foreignKey: 'transactionId'})
-  Receipt.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId'})
-  Receipt.hasMany(ReceiptLog, {as: 'logs', foreignKey: 'receiptId'})
-  ReceiptLog.belongsTo(Receipt, {as: 'receipt', foreignKey: 'receiptId'})
+  sequelize.models.transaction.hasMany(EVMReceipt, {as: 'evmReceipts', foreignKey: 'transactionId'})
+  EVMReceipt.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId'})
+  EVMReceipt.hasMany(EVMReceiptLog, {as: 'logs', foreignKey: 'receiptId'})
+  EVMReceiptLog.belongsTo(EVMReceipt, {as: 'receipt', foreignKey: 'receiptId'})
 }

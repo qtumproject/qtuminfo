@@ -20,6 +20,8 @@ const types = {
   WITNESS_IN: 'Spend from witness',
   EVM_CONTRACT_CREATE: 'EVM contract create',
   EVM_CONTRACT_CALL: 'EVM contract call',
+  EVM_CONTRACT_CREATE_SENDER: 'EVM contract create by sender',
+  EVM_CONTRACT_CALL_SENDER: 'EVM contract call by sender',
   CONTRACT_OUT: 'Pay to contract',
   CONTRACT_SPEND: 'Spend from contract'
 }
@@ -34,6 +36,8 @@ const outputIdentifiers = {
   WITNESS_V0_SCRIPTHASH: 'isWitnessScriptHashOut',
   EVM_CONTRACT_CREATE: 'isEVMContractCreate',
   EVM_CONTRACT_CALL: 'isEVMContractCall',
+  EVM_CONTRACT_CREATE_SENDER: 'isEVMContractCreateBySender',
+  EVM_CONTRACT_CALL_SENDER: 'isEVMContractCallBySender',
   CONTRACT_OUT: 'isContractOut'
 }
 const inputIdentifiers = {
@@ -152,19 +156,23 @@ export default class Script {
     })
     if (['OP_CREATE', 'OP_CALL'].includes(chunks[chunks.length - 1])) {
       for (let i = 0; i < 3; ++i) {
-        if (/^OP_\d+$/.test(chunks[i])) {
-          chunks[i] = chunks[i].slice(3)
-        } else {
-          chunks[i] = Number.parseInt(
-            Buffer.from(chunks[i], 'hex')
-              .reverse()
-              .toString('hex'),
-            16
-          )
-        }
+        chunks[i] = Script.parseNumberChunk(chunks[i])
       }
     }
     return chunks.join(' ')
+  }
+
+  static parseNumberChunk(chunk) {
+    if (/^OP_\d+$/.test(chunk)) {
+      return Number.parseInt(chunk.slice(3))
+    } else {
+      return Number.parseInt(
+        Buffer.from(chunk, 'hex')
+          .reverse()
+          .toString('hex'),
+        16
+      )
+    }
   }
 
   [util.inspect.custom]() {
@@ -271,10 +279,24 @@ export default class Script {
       && this.chunks[4].code === Opcode.OP_CREATE
   }
 
+  isEVMContractCreateBySender() {
+    return this.chunks.length === 9
+      && this.chunks[3].code === Opcode.OP_SENDER
+      && (this.chunks[4].code === Opcode.OP_4 || this.chunks[4].buffer && this.chunks[4].buffer[0] === 4)
+      && this.chunks[8].code === Opcode.OP_CREATE
+  }
+
   isEVMContractCall() {
     return this.chunks.length === 6
       && (this.chunks[0].code === Opcode.OP_4 || this.chunks[0].buffer && this.chunks[0].buffer[0] === 4)
       && this.chunks[5].code === Opcode.OP_CALL
+  }
+
+  isEVMContractCallBySender() {
+    return this.chunks.length === 10
+      && this.chunks[3].code === Opcode.OP_SENDER
+      && (this.chunks[4].code === Opcode.OP_4 || this.chunks[4].buffer && this.chunks[4].buffer[0] === 4)
+      && this.chunks[9].code === Opcode.OP_CALL
   }
 
   isContractOut() {
