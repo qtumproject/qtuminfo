@@ -251,8 +251,18 @@ export default class Script {
   }
 
   isWitnessIn() {
-    return this.chunks.length === 1 && this.chunks[0].code <= 0x16
-      && this.chunks[0].buffer.length >= 2 && this.chunks[0].buffer.length <= 40
+    if (this.chunks.length === 0) {
+      return true
+    }
+    if (this.chunks.length > 1) {
+      return false
+    }
+    let redeemBuffer = this.chunks[this.chunks.length - 1].buffer
+    if (!redeemBuffer) {
+      return false
+    }
+    let redeemScript = Script.fromBuffer(redeemBuffer, {isOutput: true})
+    return redeemScript.isStandard()
   }
 
   isEVMContractCreate() {
