@@ -1,5 +1,5 @@
 import util from 'util'
-import {BufferReader, BufferWriter, Script} from '..'
+import {BufferReader, BufferWriter, InputScript} from '..'
 
 export default class Input {
   constructor({prevTxId, outputIndex, scriptSig, sequence}) {
@@ -16,10 +16,10 @@ export default class Input {
   static fromBufferReader(reader) {
     let prevTxId = Buffer.from(reader.read(32)).reverse()
     let outputIndex = reader.readUInt32LE()
-    let scriptSig = Script.fromBuffer(reader.readVarLengthBuffer(), {
-      isInput: true,
-      isCoinbase: Buffer.compare(prevTxId, Buffer.alloc(32)) === 0 && outputIndex === 0xffffffff
-    })
+    let scriptSig = InputScript.fromBuffer(
+      reader.readVarLengthBuffer(),
+      {isCoinbase: Buffer.compare(prevTxId, Buffer.alloc(32)) === 0 && outputIndex === 0xffffffff}
+    )
     let sequence = reader.readUInt32LE()
     return new Input({prevTxId, outputIndex, scriptSig, sequence})
   }

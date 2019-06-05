@@ -1,5 +1,5 @@
 import util from 'util'
-import {BufferReader, BufferWriter, Script} from '..'
+import {BufferReader, BufferWriter, OutputScript} from '..'
 
 export default class Output {
   constructor({value, scriptPubKey}) {
@@ -13,7 +13,7 @@ export default class Output {
 
   static fromBufferReader(reader) {
     let value = reader.readUInt64LE()
-    let scriptPubKey = Script.fromBuffer(reader.readVarLengthBuffer(), {isOutput: true})
+    let scriptPubKey = OutputScript.fromBuffer(reader.readVarLengthBuffer())
     return new Output({scriptPubKey, value})
   }
 

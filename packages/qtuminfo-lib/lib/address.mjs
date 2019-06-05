@@ -27,7 +27,6 @@ export default class Address {
   }
 
   static fromScript(script, chain, transactionId, outputIndex) {
-    script._isOutput = true
     switch (script.type) {
     case Script.PUBKEY_OUT:
       return new Address({
