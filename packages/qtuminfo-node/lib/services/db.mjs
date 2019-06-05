@@ -15,10 +15,14 @@ import generateToken from '../models/token'
 import Service from './base'
 
 export default class DbService extends Service {
+  #genesisHash = null
+  #rpcOptions = null
+  #sequelize = null
+
   constructor(options) {
     super(options)
-    this._genesisHash = Header.fromBuffer(this.chain.genesis).hash
-    this._rpcOptions = Object.assign({
+    this.#genesisHash = Header.fromBuffer(this.chain.genesis).hash
+    this.#rpcOptions = Object.assign({
       protocol: 'http',
       host: 'localhost',
       port: 3889,
@@ -41,15 +45,15 @@ export default class DbService extends Service {
   }
 
   getRpcClient() {
-    return new Rpc(this._rpcOptions)
+    return new Rpc(this.#rpcOptions)
   }
 
   getDatabase() {
-    return this._sequelize
+    return this.#sequelize
   }
 
   getModel(name) {
-    return this._sequelize.models[name]
+    return this.#sequelize.models[name]
   }
 
   async getServiceTip(serviceName) {
@@ -57,7 +61,7 @@ export default class DbService extends Service {
     if (tip) {
       return {height: tip.height, hash: tip.hash}
     } else {
-      return {height: 0, hash: this._genesisHash}
+      return {height: 0, hash: this.#genesisHash}
     }
   }
 
@@ -66,7 +70,7 @@ export default class DbService extends Service {
   }
 
   async start() {
-    this._sequelize = new Sequelize(this.options.mysql.uri, {
+    this.#sequelize = new Sequelize(this.options.mysql.uri, {
       databaseVersion: 1,
       dialectOptions: {
         supportBigNumbers: true,
@@ -74,24 +78,24 @@ export default class DbService extends Service {
       },
       logging: false
     })
-    generateTip(this._sequelize)
-    generateHeader(this._sequelize)
-    generateAddress(this._sequelize)
-    generateBlock(this._sequelize)
-    generateTransaction(this._sequelize)
-    generateTransactionReceipt(this._sequelize)
-    generateTransactionOutput(this._sequelize)
-    generateContractTransaction(this._sequelize)
-    generateBalanceChange(this._sequelize)
-    generateContract(this._sequelize)
-    generateToken(this._sequelize)
-    this.Tip = this._sequelize.models.tip
+    generateTip(this.#sequelize)
+    generateHeader(this.#sequelize)
+    generateAddress(this.#sequelize)
+    generateBlock(this.#sequelize)
+    generateTransaction(this.#sequelize)
+    generateTransactionReceipt(this.#sequelize)
+    generateTransactionOutput(this.#sequelize)
+    generateContractTransaction(this.#sequelize)
+    generateBalanceChange(this.#sequelize)
+    generateContract(this.#sequelize)
+    generateToken(this.#sequelize)
+    this.Tip = this.#sequelize.models.tip
   }
 
   async stop() {
-    if (this._sequelize) {
-      this._sequelize.close()
-      this._sequelize = null
+    if (this.#sequelize) {
+      this.#sequelize.close()
+      this.#sequelize = null
     }
   }
 }

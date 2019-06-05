@@ -3,15 +3,25 @@ import {Pool, Messages, Inventory} from 'qtuminfo-p2p'
 import Service from './base'
 
 export default class P2PService extends Service {
+  #options = null
+  #outgoingTransactions = null
+  #blockCache = null
+  #pool = null
+  #peer = null
+  #peers = []
+  #inventories = null
+  #maxPeers = 60
+  #configPeers = []
+  #messages = null
+  #retryInterval = null
+
   constructor(options) {
     super(options)
-    this._options = options
-    this._client = this.node.getRpcClient()
+    this.#options = options
     this._initP2P()
     this._initPubSub()
-    this._currentBestHeight = null
-    this._outgoingTransactions = new LRU(100)
-    this._blockCache = options.blockCacheCount || new LRU({max: 10, maxAge: 5 * 60 * 1000})
+    this.#outgoingTransactions = new LRU(100)
+    this.#blockCache = options.blockCacheCount || new LRU({max: 10, maxAge: 5 * 60 * 1000})
   }
 
   static get dependencies() {
@@ -30,20 +40,20 @@ export default class P2PService extends Service {
   }
 
   clearInventoryCache() {
-    this._inventories.reset()
+    this.#inventories.reset()
   }
 
   getConnections() {
-    return this._pool.connections
+    return this.#pool.connections
   }
 
   async getP2PBlock({blockHash, filter}) {
-    let block = this._blockCache.get(blockHash)
+    let block = this.#blockCache.get(blockHash)
     if (block) {
       return block
     }
     let blockFilter = this._setResourceFilter(filter, 'blocks')
-    this._peer.sendMessage(this._messages.getblocks(blockFilter))
+    this.#peer.sendMessage(this.#messages.getblocks(blockFilter))
     return new Promise((resolve, reject) => {
       let timeout
       let callback = block => {
@@ -60,15 +70,15 @@ export default class P2PService extends Service {
 
   getHeaders(filter) {
     let headerFilter = this._setResourceFilter(filter, 'headers')
-    this._peer.sendMessage(this._messages.getheaders(headerFilter))
+    this.#peer.sendMessage(this.#messages.getheaders(headerFilter))
   }
 
   getMempool() {
-    this._peer.sendMessage(this._messages.mempool())
+    this.#peer.sendMessage(this.#messages.mempool())
   }
 
   async sendRawTransaction(data) {
-    let id = await this._client.sendrawtransaction(data.toString('hex'))
+    let id = await this.node.getRpcClient().sendrawtransaction(data.toString('hex'))
     return Buffer.from(id, 'hex')
   }
 
@@ -80,11 +90,11 @@ export default class P2PService extends Service {
 
   _disconnectPool() {
     this.logger.info('P2P Service: diconnecting pool and peers. SIGINT issued, system shutdown initiated')
-    this._pool.disconnect()
+    this.#pool.disconnect()
   }
 
   _addPeer(peer) {
-    this._peers.push(peer)
+    this.#peers.push(peer)
   }
 
   _broadcast(subscribers, name, entity) {
@@ -94,51 +104,51 @@ export default class P2PService extends Service {
   }
 
   _setRetryInterval() {
-    if (!this._retryInterval && !this.node.stopping) {
-      this._retryInterval = setInterval(() => {
+    if (!this.#retryInterval && !this.node.stopping) {
+      this.#retryInterval = setInterval(() => {
         this.logger.info('P2P Service: retry connection to p2p network')
-        this._pool.connect()
+        this.#pool.connect()
       }, 5000)
     }
   }
 
   _connect() {
     this.logger.info('P2P Service: connecting to p2p network')
-    this._pool.connect()
+    this.#pool.connect()
     this._setRetryInterval()
   }
 
   _getBestHeight() {
-    if (this._peers.length === 0) {
+    if (this.#peers.length === 0) {
       return 0
     }
     let maxHeight = -Infinity
-    for (let peer of this._peers) {
+    for (let peer of this.#peers) {
       if (peer.bestHeight > maxHeight) {
         maxHeight = peer.bestHeight
-        this._peer = peer
+        this.#peer = peer
       }
     }
     return maxHeight
   }
 
   _initCache() {
-    this._inventories = new LRU(1000)
+    this.#inventories = new LRU(1000)
   }
 
   _initP2P() {
-    this._maxPeers = this._options.maxPeers || 60
-    this._configPeers = this._options.peers
-    this._messages = new Messages({chain: this.chain})
-    this._peers = []
+    this.#maxPeers = this.#options.maxPeers || 60
+    this.#configPeers = this.#options.peers
+    this.#messages = new Messages({chain: this.chain})
+    this.#peers = []
   }
 
   _initPool() {
-    let options = {dnsSeed: false, maxPeers: this._maxPeers, chain: this.chain}
-    if (this._configPeers) {
-      options.addresses = this._configPeers
+    let options = {dnsSeed: false, maxPeers: this.#maxPeers, chain: this.chain}
+    if (this.#configPeers) {
+      options.addresses = this.#configPeers
     }
-    this._pool = new Pool(options)
+    this.#pool = new Pool(options)
   }
 
   _initPubSub() {
@@ -150,14 +160,14 @@ export default class P2PService extends Service {
   }
 
   _onPeerBlock(peer, message) {
-    this._blockCache.set(message.block.id, message.block)
+    this.#blockCache.set(message.block.id, message.block)
     this.emit(message.block.id, message.block)
     this._broadcast(this.subscriptions.block, 'p2p/block', message.block)
   }
 
   _onPeerDisconnect(peer, address) {
     this._removePeer(peer)
-    if (this._peers.length === 0) {
+    if (this.#peers.length === 0) {
       this._setRetryInterval()
     }
     this.logger.info('P2P Service: disconnected from peer:', address.ip.v4)
@@ -167,9 +177,9 @@ export default class P2PService extends Service {
     let txId = Buffer.from(message.inventory[0].data)
       .reverse()
       .toString('hex')
-    let tx = this._outgoingTransactions.get(txId)
+    let tx = this.#outgoingTransactions.get(txId)
     if (tx) {
-      peer.sendMessage(this._messages.tx({transaction: tx}))
+      peer.sendMessage(this.#messages.tx({transaction: tx}))
     }
   }
 
@@ -180,8 +190,8 @@ export default class P2PService extends Service {
   _onPeerInventories(peer, message) {
     let newDataNeeded = []
     for (let inventory of message.inventories) {
-      if (!this._inventories.get(inventory.data.toString('hex'))) {
-        this._inventories.set(inventory.data.toString('hex'), true)
+      if (!this.#inventories.get(inventory.data.toString('hex'))) {
+        this.#inventories.set(inventory.data.toString('hex'), true)
         if ([
           Inventory.types.TRANSACTION, Inventory.types.BLOCK, Inventory.types.FILTERED_BLOCK
         ].includes(inventory.type)) {
@@ -191,7 +201,7 @@ export default class P2PService extends Service {
       }
     }
     if (newDataNeeded.length > 0) {
-      peer.sendMessage(this._messages.getdata({inventories: newDataNeeded}))
+      peer.sendMessage(this.#messages.getdata({inventories: newDataNeeded}))
     }
   }
 
@@ -207,9 +217,9 @@ export default class P2PService extends Service {
   }
 
   _onPeerReady(peer, address) {
-    if (this._retryInterval) {
-      clearInterval(this._retryInterval)
-      this._retryInterval = null
+    if (this.#retryInterval) {
+      clearInterval(this.#retryInterval)
+      this.#retryInterval = null
     }
     if (!this._matchChain(peer.chain)) {
       return
@@ -234,18 +244,18 @@ export default class P2PService extends Service {
   }
 
   _removePeer(peer) {
-    this._peers.splice(this._peers.indexOf(peer), 1)
+    this.#peers.splice(this.#peers.indexOf(peer), 1)
   }
 
   _setListeners() {
     this.node.on('stopping', this._disconnectPool.bind(this))
-    this._pool.on('peerready', this._onPeerReady.bind(this))
-    this._pool.on('peerdisconnect', this._onPeerDisconnect.bind(this))
-    this._pool.on('peerinv', this._onPeerInventories.bind(this))
-    this._pool.on('peertx', this._onPeerTransaction.bind(this))
-    this._pool.on('peerblock', this._onPeerBlock.bind(this))
-    this._pool.on('peerheaders', this._onPeerHeaders.bind(this))
-    this._pool.on('peergetdata', this._onPeerGetData.bind(this))
+    this.#pool.on('peerready', this._onPeerReady.bind(this))
+    this.#pool.on('peerdisconnect', this._onPeerDisconnect.bind(this))
+    this.#pool.on('peerinv', this._onPeerInventories.bind(this))
+    this.#pool.on('peertx', this._onPeerTransaction.bind(this))
+    this.#pool.on('peerblock', this._onPeerBlock.bind(this))
+    this.#pool.on('peerheaders', this._onPeerHeaders.bind(this))
+    this.#pool.on('peergetdata', this._onPeerGetData.bind(this))
     this.node.on('ready', this._connect.bind(this))
   }
 

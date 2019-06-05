@@ -11,6 +11,8 @@ const transferABI = Solidity.qrc20ABIs.find(abi => abi.name === 'transfer')
 const TransferABI = Solidity.qrc20ABIs.find(abi => abi.name === 'Transfer')
 
 export default class ContractService extends Service {
+  #tip = null
+
   static get dependencies() {
     return ['block', 'db', 'transaction']
   }
@@ -28,13 +30,13 @@ export default class ContractService extends Service {
     this.QRC20Balance = this.node.getModel('qrc20_balance')
     this.QRC721 = this.node.getModel('qrc721')
     this.QRC721Token = this.node.getModel('qrc721_token')
-    this._tip = await this.node.getServiceTip(this.name)
+    this.#tip = await this.node.getServiceTip(this.name)
     let blockTip = await this.node.getBlockTip()
-    if (this._tip.height > blockTip.height) {
-      this._tip = {height: blockTip.height, hash: blockTip.hash}
+    if (this.#tip.height > blockTip.height) {
+      this.#tip = {height: blockTip.height, hash: blockTip.hash}
     }
-    await this.onReorg(this._tip.height)
-    await this.node.updateServiceTip(this.name, this._tip)
+    await this.onReorg(this.#tip.height)
+    await this.node.updateServiceTip(this.name, this.#tip)
   }
 
   async onBlock(block) {
@@ -106,9 +108,9 @@ export default class ContractService extends Service {
     if (this.node.isSynced()) {
       await this._syncContracts()
     }
-    this._tip.height = block.height
-    this._tip.hash = block.hash
-    await this.node.updateServiceTip(this.name, this._tip)
+    this.#tip.height = block.height
+    this.#tip.hash = block.hash
+    await this.node.updateServiceTip(this.name, this.#tip)
   }
 
   async onReorg(height) {

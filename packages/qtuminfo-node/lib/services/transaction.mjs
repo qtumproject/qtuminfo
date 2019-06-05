@@ -6,11 +6,8 @@ import Service from './base'
 const {gt: $gt, in: $in} = Sequelize.Op
 
 export default class TransactionService extends Service {
-  constructor(options) {
-    super(options)
-    this._tip = null
-    this._synced = false
-  }
+  #tip = null
+  #synced = false
 
   static get dependencies() {
     return ['block', 'db']
@@ -27,20 +24,20 @@ export default class TransactionService extends Service {
     this.ContractSpend = this.node.getModel('contract_spend')
     this.EVMReceipt = this.node.getModel('evm_receipt')
     this.EVMReceiptLog = this.node.getModel('evm_receipt_log')
-    this._tip = await this.node.getServiceTip(this.name)
+    this.#tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
-    if (this._tip.height > blockTip.height) {
-      this._tip = {height: blockTip.height, hash: blockTip.hash}
+    if (this.#tip.height > blockTip.height) {
+      this.#tip = {height: blockTip.height, hash: blockTip.hash}
     }
     await this.TransactionOutput.destroy({
       where: {
         outputTxId: null,
-        inputHeight: {[$gt]: this._tip.height}
+        inputHeight: {[$gt]: this.#tip.height}
       }
     })
     await this.TransactionOutput.update(
       {inputTxId: null, inputIndex: null, scriptSig: null, sequence: null, inputHeight: null},
-      {where: {inputHeight: {[$gt]: this._tip.height}}}
+      {where: {inputHeight: {[$gt]: this.#tip.height}}}
     )
     await this.db.query(`
       DELETE tx, witness, txo, receipt, log, refund, contract_spend, balance
@@ -52,10 +49,10 @@ export default class TransactionService extends Service {
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
-      WHERE tx.block_height > ${this._tip.height}
+      WHERE tx.block_height > ${this.#tip.height}
     `)
-    await this.Address.destroy({where: {createHeight: {[$gt]: this._tip.height}}})
-    await this.node.updateServiceTip(this.name, this._tip)
+    await this.Address.destroy({where: {createHeight: {[$gt]: this.#tip.height}}})
+    await this.node.updateServiceTip(this.name, this.#tip)
   }
 
   async onReorg(height) {
@@ -105,15 +102,15 @@ export default class TransactionService extends Service {
       let newTransactions = await this._processBlock(block)
       await this.processOutputs(newTransactions, block)
       await this.processInputs(newTransactions, block)
-      if (this._synced) {
+      if (this.#synced) {
         await this.processBalanceChanges(block, newTransactions)
       } else {
         await this.processBalanceChanges(block)
       }
       await this._processContracts(block)
-      this._tip.height = block.height
-      this._tip.hash = block.hash
-      await this.node.updateServiceTip(this.name, this._tip)
+      this.#tip.height = block.height
+      this.#tip.hash = block.hash
+      await this.node.updateServiceTip(this.name, this.#tip)
     } catch (err) {
       this.logger.error('Transaction Service:', err)
       this.node.stop()
@@ -121,14 +118,14 @@ export default class TransactionService extends Service {
   }
 
   async onSynced() {
-    this._synced = true
+    this.#synced = true
   }
 
   async _processBlock(block) {
     let newTransactions = []
     let txs = []
     let witnesses = []
-    if (this._synced) {
+    if (this.#synced) {
       let mempoolTransactions = await this.Transaction.findAll({
         where: {id: {[$in]: block.transactions.slice(block.height > 5000 ? 2 : 1).map(tx => tx.id)}},
         attributes: ['id']

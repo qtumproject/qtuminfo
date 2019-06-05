@@ -15,6 +15,8 @@ function getTypes(abi, category) {
 }
 
 export class MethodABI {
+  #id = null
+
   constructor({type = 'function', name, stateMutability, inputs = [], outputs = []}) {
     this.type = type
     this.name = name
@@ -24,8 +26,8 @@ export class MethodABI {
   }
 
   get id() {
-    this._id = this._id || ethjsABI.methodID(this.name, getTypes(this, 'inputs'))
-    return this._id
+    this.#id = this.#id || ethjsABI.methodID(this.name, getTypes(this, 'inputs'))
+    return this.#id
   }
 
   encodeInputs(params) {
@@ -46,6 +48,8 @@ export class MethodABI {
 }
 
 export class EventABI {
+  #id = null
+
   constructor({name, anonymous = false, inputs = []}) {
     this.type = 'event'
     this.name = name
@@ -54,8 +58,8 @@ export class EventABI {
   }
 
   get id() {
-    this._id = this._id || ethjsABI.eventID(this.name, getTypes(this, 'inputs'))
-    return this._id
+    this.#id = this.#id || ethjsABI.eventID(this.name, getTypes(this, 'inputs'))
+    return this.#id
   }
 
   encode(params) {

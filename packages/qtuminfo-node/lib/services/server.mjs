@@ -2,9 +2,13 @@ import socketio from 'socket.io'
 import Service from './base'
 
 export default class ServerService extends Service {
+  #options = null
+  #bus = null
+  #io = null
+
   constructor(options) {
     super(options)
-    this._options = options
+    this.#options = options
   }
 
   static get dependencies() {
@@ -12,20 +16,20 @@ export default class ServerService extends Service {
   }
 
   async start() {
-    this._bus = this.node.openBus({remoteAddress: 'localhost-server'})
-    this._bus.on('block/block', this._onBlock.bind(this))
-    this._bus.subscribe('block/block')
-    this._bus.on('block/reorg', this._onMempoolTransaction.bind(this))
-    this._bus.subscribe('block/reorg')
-    this._bus.on('mempool/transaction', this._onMempoolTransaction.bind(this))
-    this._bus.subscribe('mempool/transaction')
+    this.#bus = this.node.openBus({remoteAddress: 'localhost-server'})
+    this.#bus.on('block/block', this._onBlock.bind(this))
+    this.#bus.subscribe('block/block')
+    this.#bus.on('block/reorg', this._onMempoolTransaction.bind(this))
+    this.#bus.subscribe('block/reorg')
+    this.#bus.on('mempool/transaction', this._onMempoolTransaction.bind(this))
+    this.#bus.subscribe('mempool/transaction')
 
-    this._io = socketio(this._options.port || 3001, {serveClient: false})
-    this._io.on('connection', this._onConnection.bind(this))
+    this.#io = socketio(this.#options.port || 3001, {serveClient: false})
+    this.#io.on('connection', this._onConnection.bind(this))
   }
 
   async stop() {
-    this._io.close()
+    this.#io.close()
   }
 
   _onConnection(socket) {
@@ -33,14 +37,14 @@ export default class ServerService extends Service {
   }
 
   _onBlock(block) {
-    this._io.sockets.emit('block', {hash: block.hash, height: block.height})
+    this.#io.sockets.emit('block', {hash: block.hash, height: block.height})
   }
 
   _onReorg(block) {
-    this._io.sockets.emit('reorg', {hash: block.hash, height: block.height})
+    this.#io.sockets.emit('reorg', {hash: block.hash, height: block.height})
   }
 
   _onMempoolTransaction(transaction) {
-    this._io.sockets.emit('mempool-transaction', transaction.id)
+    this.#io.sockets.emit('mempool-transaction', transaction.id)
   }
 }

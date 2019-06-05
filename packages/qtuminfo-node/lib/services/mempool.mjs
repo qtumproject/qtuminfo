@@ -1,11 +1,15 @@
 import Service from './base'
 
 export default class MempoolService extends Service {
+  #transaction = null
+  #subscribed = false
+  #enabled = false
+  #bus = null
+
   constructor(options) {
     super(options)
     this.subscriptions = {transaction: []}
-    this._transaction = this.node.services.get('transaction')
-    this._enabled = false
+    this.#transaction = this.node.services.get('transaction')
   }
 
   static get dependencies() {
@@ -19,21 +23,21 @@ export default class MempoolService extends Service {
   }
 
   _startSubscriptions() {
-    if (this._subscribed) {
+    if (this.#subscribed) {
       return
     }
-    this._subscribed = true
-    if (!this._bus) {
-      this._bus = this.node.openBus({remoteAddress: 'localhost-mempool'})
+    this.#subscribed = true
+    if (!this.#bus) {
+      this.#bus = this.node.openBus({remoteAddress: 'localhost-mempool'})
     }
-    this._bus.on('p2p/transaction', this._onTransaction.bind(this))
-    this._bus.subscribe('p2p/transaction')
+    this.#bus.on('p2p/transaction', this._onTransaction.bind(this))
+    this.#bus.subscribe('p2p/transaction')
   }
 
   enable() {
     this.logger.info('Mempool Service: mempool enabled')
     this._startSubscriptions()
-    this._enabled = true
+    this.#enabled = true
   }
 
   onSynced() {
@@ -45,7 +49,7 @@ export default class MempoolService extends Service {
       if (!await this._validate(tx)) {
         return
       }
-      await this._transaction.removeReplacedTransactions(tx)
+      await this.#transaction.removeReplacedTransactions(tx)
       let witnesses = []
       await this.Transaction.create({
         id: tx.id,
@@ -70,10 +74,10 @@ export default class MempoolService extends Service {
       }
       await Promise.all([
         this.Witness.bulkCreate(witnesses, {validate: false}),
-        this._transaction.processOutputs([tx], {height: 0xffffffff}),
-        this._transaction.processInputs([tx], {height: 0xffffffff})
+        this.#transaction.processOutputs([tx], {height: 0xffffffff}),
+        this.#transaction.processInputs([tx], {height: 0xffffffff})
       ])
-      await this._transaction.processBalanceChanges({height: 0xffffffff}, [tx])
+      await this.#transaction.processBalanceChanges({height: 0xffffffff}, [tx])
 
       for (let subscription of this.subscriptions.transaction) {
         subscription.emit('mempool/transaction', tx)

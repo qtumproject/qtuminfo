@@ -10,18 +10,26 @@ const MAX_CHAINWORK = 1n << 256n
 const STARTING_CHAINWORK = 0x100010001n
 
 export default class HeaderService extends Service {
+  #p2p = null
+  #tip = null
+  #checkpoint = 2000
+  #genesisHeader = null
+  #lastHeader = null
+  #initialSync = true
+  #originalHeight = 0
+  #lastHeaderCount = 2000
+  #bus = null
+  #reorging = false
+  #blockProcessor = null
+  #subscribedHeaders = false
+  #lastTipHeightReported = null
+
   constructor(options) {
     super(options)
-    this._p2p = this.node.services.get('p2p')
-    this._tip = null
-    this._hashes = []
+    this.#p2p = this.node.services.get('p2p')
     this.subscriptions = {block: []}
-    this._checkpoint = options.checkpoint || 2000
-    this._genesisHeader = Header.fromBuffer(this.chain.genesis)
-    this._lastHeader = null
-    this._initialSync = true
-    this._originalHeight = 0
-    this._lastHeaderCount = 2000
+    this.#checkpoint = options.checkpoint || 2000
+    this.#genesisHeader = Header.fromBuffer(this.chain.genesis)
   }
 
   static get dependencies() {
@@ -33,58 +41,58 @@ export default class HeaderService extends Service {
   }
 
   getBestHeight() {
-    return this._tip.height
+    return this.#tip.height
   }
 
   async start() {
     this.Header = this.node.getModel('header')
-    this._tip = await this.node.getServiceTip(this.name)
+    this.#tip = await this.node.getServiceTip(this.name)
     this._adjustTipBackToCheckpoint()
-    if (this._tip.height === 0) {
+    if (this.#tip.height === 0) {
       await this._setGenesisBlock()
     }
     await this._adjustHeadersForCheckpointTip()
-    this._blockProcessor = new AsyncQueue(this._processBlocks.bind(this))
-    this._p2p.on('bestHeight', this._onBestHeight.bind(this))
-    this._bus = this.node.openBus({remoteAddress: 'localhost-header'})
+    this.#blockProcessor = new AsyncQueue(this._processBlocks.bind(this))
+    this.#p2p.on('bestHeight', this._onBestHeight.bind(this))
+    this.#bus = this.node.openBus({remoteAddress: 'localhost-header'})
   }
 
   _adjustTipBackToCheckpoint() {
-    this._originalHeight = this._tip.height
-    if (this._checkpoint === -1 || this._tip.height < this._checkpoint) {
-      this._tip.height = 0
-      this._tip.hash = this._genesisHeader.hash
+    this.#originalHeight = this.#tip.height
+    if (this.#checkpoint === -1 || this.#tip.height < this.#checkpoint) {
+      this.#tip.height = 0
+      this.#tip.hash = this.#genesisHeader.hash
     } else {
-      this._tip.height -= this._checkpoint
+      this.#tip.height -= this.#checkpoint
     }
   }
 
   async _setGenesisBlock() {
     assert(
-      Buffer.compare(this._tip.hash, this._genesisHeader.hash) === 0,
+      Buffer.compare(this.#tip.hash, this.#genesisHeader.hash) === 0,
       'Expected tip hash to be genesis hash, but it was not'
     )
     await this.Header.destroy({truncate: true})
-    this._lastHeader = await this.Header.create({
-      hash: this._genesisHeader.hash,
+    this.#lastHeader = await this.Header.create({
+      hash: this.#genesisHeader.hash,
       height: 0,
-      ...this._genesisHeader,
+      ...this.#genesisHeader,
       chainwork: STARTING_CHAINWORK
     })
   }
 
   _startHeaderSubscription() {
-    if (this._subscribedHeaders) {
+    if (this.#subscribedHeaders) {
       return
     }
-    this._subscribedHeaders = true
+    this.#subscribedHeaders = true
     this.logger.info('Header Service: subscribe to p2p headers')
-    this._bus.on('p2p/headers', this._onHeaders.bind(this))
-    this._bus.subscribe('p2p/headers')
+    this.#bus.on('p2p/headers', this._onHeaders.bind(this))
+    this.#bus.subscribe('p2p/headers')
   }
 
   _queueBlock(block) {
-    this._blockProcessor.push(block, err => {
+    this.#blockProcessor.push(block, err => {
       if (err) {
         this._handleError(err)
       } else {
@@ -97,7 +105,7 @@ export default class HeaderService extends Service {
   }
 
   async _processBlocks(block) {
-    if (this.node.stopping || this._reorging) {
+    if (this.node.stopping || this.#reorging) {
       return
     }
     try {
@@ -117,7 +125,7 @@ export default class HeaderService extends Service {
       await this._syncBlock(block)
       return
     }
-    this._reorging = true
+    this.#reorging = true
     this.emit('reorg')
     await this._handleReorg(block)
     this._startSync()
@@ -128,7 +136,7 @@ export default class HeaderService extends Service {
     let header = new this.Header({hash: block.header.hash, ...block.header})
     this._onHeader(header)
     await header.save()
-    await this.node.updateServiceTip(this.name, this._tip)
+    await this.node.updateServiceTip(this.name, this.#tip)
   }
 
   _broadcast(block) {
@@ -138,16 +146,16 @@ export default class HeaderService extends Service {
   }
 
   _onHeader(header) {
-    header.height = this._lastHeader.height + 1
-    header.chainwork = this._getChainwork(header, this._lastHeader)
-    this._lastHeader = header
-    this._tip.height = header.height
-    this._tip.hash = header.hash
+    header.height = this.#lastHeader.height + 1
+    header.chainwork = this._getChainwork(header, this.#lastHeader)
+    this.#lastHeader = header
+    this.#tip.height = header.height
+    this.#tip.hash = header.hash
   }
 
   async _onHeaders(headers) {
     try {
-      this._lastHeaderCount = headers.length
+      this.#lastHeaderCount = headers.length
       if (headers.length === 0) {
         this._onHeadersSave().catch(err => this._handleError(err))
       } else {
@@ -168,15 +176,15 @@ export default class HeaderService extends Service {
         }))
         for (let header of transformedHeaders) {
           assert(
-            Buffer.compare(this._lastHeader.hash, header.prevHash) === 0,
-            `headers not in order: ${this._lastHeader.hash.toString('hex')}' -and- ${header.prevHash.toString('hex')},`,
-            `last header at height: ${this._lastHeader.height}`
+            Buffer.compare(this.#lastHeader.hash, header.prevHash) === 0,
+            `headers not in order: ${this.#lastHeader.hash.toString('hex')}' -and- ${header.prevHash.toString('hex')},`,
+            `last header at height: ${this.#lastHeader.height}`
           )
           this._onHeader(header)
         }
         await this.Header.bulkCreate(transformedHeaders)
       }
-      await this.node.updateServiceTip(this.name, this._tip)
+      await this.node.updateServiceTip(this.name, this.#tip)
       await this._onHeadersSave()
     } catch (err) {
       this._handleError(err)
@@ -196,24 +204,24 @@ export default class HeaderService extends Service {
     }
     this._stopHeaderSubscription()
     this._startBlockSubscription()
-    this.logger.debug('Header Service:', this._lastHeader.hash.toString('hex'), 'is the best block hash')
-    if (!this._initialSync) {
+    this.logger.debug('Header Service:', this.#lastHeader.hash.toString('hex'), 'is the best block hash')
+    if (!this.#initialSync) {
       return
     }
     this.logger.info('Header Service: sync complete')
-    this._initialSync = false
+    this.#initialSync = false
     for (let service of this.node.getServicesByOrder()) {
       await service.onHeaders()
     }
     this.emit('reorg complete')
-    this._reorging = false
+    this.#reorging = false
   }
 
   _stopHeaderSubscription() {
-    if (this._subscribedHeaders) {
-      this._subscribedHeaders = false
+    if (this.#subscribedHeaders) {
+      this.#subscribedHeaders = false
       this.logger.info('Header Service: p2p header subscription no longer needed, unsubscribing')
-      this._bus.unsubscribe('p2p/headers')
+      this.#bus.unsubscribe('p2p/headers')
     }
   }
 
@@ -221,22 +229,22 @@ export default class HeaderService extends Service {
     if (!this._subscribedBlock) {
       this._subscribedBlock = true
       this.logger.info('Header Service: starting p2p block subscription')
-      this._bus.on('p2p/block', this._queueBlock.bind(this))
-      this._bus.subscribe('p2p/block')
+      this.#bus.on('p2p/block', this._queueBlock.bind(this))
+      this.#bus.subscribe('p2p/block')
     }
   }
 
   get _syncComplete() {
-    return this._lastHeaderCount < 2000
+    return this.#lastHeaderCount < 2000
   }
 
   _detectReorg(block) {
-    return Buffer.compare(this._lastHeader.hash, block.header.prevHash) !== 0
+    return Buffer.compare(this.#lastHeader.hash, block.header.prevHash) !== 0
   }
 
   async _handleReorg(block) {
     this.logger.warn(
-      `Header Service: reorganization detected, current tip hash: ${this._tip.hash.toString('hex')},`,
+      `Header Service: reorganization detected, current tip hash: ${this.#tip.hash.toString('hex')},`,
       'new block causing the reorg:', block.hash.toString('hex')
     )
     this._adjustTipBackToCheckpoint()
@@ -250,13 +258,13 @@ export default class HeaderService extends Service {
   }
 
   _startSync() {
-    this._initialSync = true
+    this.#initialSync = true
     this.logger.debug('Header Service: starting sync routines, ensuring no pre-exiting subscriptions to p2p blocks')
     this._removeAllSubscriptions()
     let interval = setInterval(() => {
-      if (this._blockProcessor.length === 0) {
+      if (this.#blockProcessor.length === 0) {
         clearInterval(interval)
-        let numNeeded = Math.max(this._bestHeight, this._originalHeight) - this._tip.height
+        let numNeeded = Math.max(this._bestHeight, this.#originalHeight) - this.#tip.height
         assert(numNeeded >= 0)
         if (numNeeded > 0) {
           this.logger.info('Header Service: gathering:', numNeeded, 'header(s) from the peer-to-peer network')
@@ -269,25 +277,25 @@ export default class HeaderService extends Service {
   }
 
   _removeAllSubscriptions() {
-    this._bus.unsubscribe('p2p/headers')
-    this._bus.unsubscribe('p2p/block')
+    this.#bus.unsubscribe('p2p/headers')
+    this.#bus.unsubscribe('p2p/block')
     this._subscribedBlock = false
-    this._subscribedHeaders = false
-    this._bus.removeAllListeners()
+    this.#subscribedHeaders = false
+    this.#bus.removeAllListeners()
   }
 
   _logProcess() {
-    if (!this._initialSync || this._lastTipHeightReported === this._tip.height) {
+    if (!this.#initialSync || this.#lastTipHeightReported === this.#tip.height) {
       return
     }
-    let bestHeight = Math.max(this._bestHeight, this._lastHeader.height)
-    let progress = bestHeight === 0 ? 0 : (this._tip.height / bestHeight * 100).toFixed(2)
+    let bestHeight = Math.max(this._bestHeight, this.#lastHeader.height)
+    let progress = bestHeight === 0 ? 0 : (this.#tip.height / bestHeight * 100).toFixed(2)
     this.logger.info(
       'Header Service: download progress:',
-      `${this._tip.height}/${bestHeight}`,
+      `${this.#tip.height}/${bestHeight}`,
       `(${progress}%)`
     )
-    this._lastTipHeightReported = this._tip.height
+    this.#lastTipHeightReported = this.#tip.height
   }
 
   _getP2PHeaders(hash) {
@@ -296,13 +304,13 @@ export default class HeaderService extends Service {
 
   _sync() {
     this._startHeaderSubscription()
-    this._getP2PHeaders(this._tip.hash)
+    this._getP2PHeaders(this.#tip.hash)
   }
 
   async getEndHash(tip, blockCount) {
     assert(blockCount >= 1, 'Header Service: block count to getEndHash must be at least 1')
-    let numResultsNeeded = Math.min(this._tip.height - tip.height, blockCount + 1)
-    if (numResultsNeeded === 0 && Buffer.compare(this._tip.hash, tip.hash) === 0) {
+    let numResultsNeeded = Math.min(this.#tip.height - tip.height, blockCount + 1)
+    if (numResultsNeeded === 0 && Buffer.compare(this.#tip.hash, tip.hash) === 0) {
       return
     } else if (numResultsNeeded <= 0) {
       throw new Error('Header Service: block service is mis-aligned')
@@ -318,15 +326,15 @@ export default class HeaderService extends Service {
   }
 
   getLastHeader() {
-    return this._lastHeader
+    return this.#lastHeader
   }
 
   async _adjustHeadersForCheckpointTip() {
-    this.logger.info('Header Service: getting last header synced at height:', this._tip.height)
-    await this.Header.destroy({where: {height: {[$gt]: this._tip.height}}})
-    this._lastHeader = await this.Header.findByHeight(this._tip.height)
-    this._tip.height = this._lastHeader.height
-    this._tip.hash = this._lastHeader.hash
+    this.logger.info('Header Service: getting last header synced at height:', this.#tip.height)
+    await this.Header.destroy({where: {height: {[$gt]: this.#tip.height}}})
+    this.#lastHeader = await this.Header.findByHeight(this.#tip.height)
+    this.#tip.height = this.#lastHeader.height
+    this.#tip.hash = this.#lastHeader.hash
   }
 
   _getChainwork(header, prevHeader) {

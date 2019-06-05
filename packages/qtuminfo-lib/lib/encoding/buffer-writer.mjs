@@ -1,18 +1,16 @@
 export default class BufferWriter {
-  constructor() {
-    this.buffer = []
-  }
+  #buffer = []
 
   toBuffer() {
-    return Buffer.concat(this.buffer)
+    return Buffer.concat(this.#buffer)
   }
 
   write(buffer) {
-    this.buffer.push(buffer)
+    this.#buffer.push(buffer)
   }
 
   writeHexString(string) {
-    this.buffer.push(Buffer.from(string, 'hex'))
+    this.#buffer.push(Buffer.from(string, 'hex'))
   }
 
   writeUInt8(n) {

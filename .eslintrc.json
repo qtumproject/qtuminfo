@@ -73,7 +73,6 @@
     "key-spacing": "warn",
     "keyword-spacing": "warn",
     "linebreak-style": "error",
-    "lines-between-class-members": "warn",
     "newline-per-chained-call": "warn",
     "no-array-constructor": "error",
     "no-lonely-if": "warn",

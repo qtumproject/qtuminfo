@@ -4,6 +4,9 @@ import Input from './input'
 import Output from './output'
 
 export default class Transaction {
+  #id = null
+  #hash = null
+
   constructor({version, flag, inputs, outputs, witnesses, lockTime}) {
     this.version = version
     this.flag = flag
@@ -14,13 +17,13 @@ export default class Transaction {
   }
 
   get id() {
-    this._id = this._id || Hash.sha256sha256(this.toHashBuffer()).reverse()
-    return this._id
+    this.#id = this.#id || Hash.sha256sha256(this.toHashBuffer()).reverse()
+    return this.#id
   }
 
   get hash() {
-    this._hash = this._hash || Hash.sha256sha256(this.toBuffer()).reverse()
-    return this._hash
+    this.#hash = this.#hash || Hash.sha256sha256(this.toBuffer()).reverse()
+    return this.#hash
   }
 
   get size() {

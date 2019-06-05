@@ -4,6 +4,8 @@ import {BufferReader, BufferWriter, Hash} from '..'
 const GENESIS_BITS = 0x1d00ffff
 
 export default class Header {
+  #hash = null
+
   constructor({
     version, prevHash, merkleRoot, timestamp, bits, nonce,
     hashStateRoot, hashUTXORoot, stakePrevTxId, stakeOutputIndex, signature
@@ -68,8 +70,8 @@ export default class Header {
   }
 
   get hash() {
-    this._hash = this._hash || Hash.sha256sha256(this.toBuffer()).reverse()
-    return this._hash
+    this.#hash = this.#hash || Hash.sha256sha256(this.toBuffer()).reverse()
+    return this.#hash
   }
 
   [util.inspect.custom](depth = 0) {

@@ -62,11 +62,16 @@ export class InvalidScriptError extends Error {
 }
 
 export default class Script {
+  #isOutput = false
+  #isInput = false
+  #isCoinbase = false
+  #type = null
+
   constructor(chunks, {isOutput = false, isInput = false, isCoinbase = false}) {
     this.chunks = chunks
-    this._isOutput = isOutput
-    this._isInput = isInput
-    this._isCoinbase = isCoinbase
+    this.#isOutput = isOutput
+    this.#isInput = isInput
+    this.#isCoinbase = isCoinbase
   }
 
   static fromBuffer(buffer, {isOutput = false, isInput = false, isCoinbase = false}) {
@@ -114,7 +119,7 @@ export default class Script {
   }
 
   toBufferWriter(writer) {
-    if (this._isCoinbase) {
+    if (this.#isCoinbase) {
       writer.write(this.chunks[0].buffer)
       return
     }
@@ -180,7 +185,7 @@ export default class Script {
   }
 
   isCoinbase() {
-    return this._isCoinbase
+    return this.#isCoinbase
   }
 
   isPublicKeyOut() {
@@ -310,12 +315,12 @@ export default class Script {
   }
 
   get type() {
-    if (this._type) {
-      return this._type
+    if (this.#type) {
+      return this.#type
     }
-    if (this._isOutput) {
+    if (this.#isOutput) {
       return this._classifyOutput()
-    } else if (this._isInput) {
+    } else if (this.#isInput) {
       return this._classifyInput()
     } else {
       return types.UNKNOWN
