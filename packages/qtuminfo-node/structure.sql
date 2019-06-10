@@ -1,6 +1,6 @@
 CREATE TABLE `address` (
   `_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  `type` enum('pubkeyhash','scripthash','witness_v0_keyhash','witness_v0_scripthash','contract','evm_contract','x86_contract') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
+  `type` tinyint(3) unsigned NOT NULL,
   `data` varbinary(32) NOT NULL,
   `string` varchar(64) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL,
   `create_height` int(10) unsigned NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE `balance_change` (
   `index_in_block` int(10) unsigned NOT NULL,
   `address_id` bigint(20) unsigned NOT NULL,
   `value` bigint(20) NOT NULL,
-  PRIMARY KEY (`transaction_id`,`address_id`),
+  PRIMARY KEY (`transaction_id`,`address_id`) USING BTREE,
   UNIQUE KEY `address` (`address_id`,`block_height`,`index_in_block`,`transaction_id`,`value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -41,12 +41,9 @@ CREATE TABLE `contract` (
   `type` enum('dgp','qrc20','qrc721') CHARACTER SET utf8 COLLATE utf8_general_ci DEFAULT NULL,
   `bytecode_sha256sum` binary(32) NOT NULL,
   `description` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `owner_id` bigint(20) unsigned NOT NULL,
-  `create_transaction_id` varbinary(32) DEFAULT NULL,
-  `create_height` int(10) unsigned DEFAULT NULL,
-  PRIMARY KEY (`address`),
-  UNIQUE KEY `address` (`address_string`),
-  KEY `bytecode` (`bytecode_sha256sum`)
+  PRIMARY KEY (`address`) USING BTREE,
+  UNIQUE KEY `address` (`address_string`) USING BTREE,
+  KEY `bytecode` (`bytecode_sha256sum`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `contract_code` (
@@ -59,8 +56,8 @@ CREATE TABLE `contract_code` (
 CREATE TABLE `contract_spend` (
   `source_id` binary(32) NOT NULL,
   `dest_id` binary(32) NOT NULL,
-  PRIMARY KEY (`source_id`),
-  KEY `dest` (`dest_id`)
+  PRIMARY KEY (`source_id`) USING BTREE,
+  KEY `dest` (`dest_id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `contract_tag` (
@@ -70,14 +67,14 @@ CREATE TABLE `contract_tag` (
   PRIMARY KEY (`_id`),
   KEY `contract` (`contract_address`),
   KEY `tag` (`tag`)
-) ENGINE=InnoDB AUTO_INCREMENT=246 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `gas_refund` (
   `transaction_id` binary(32) NOT NULL,
   `output_index` int(10) unsigned NOT NULL,
   `refund_transaction_id` binary(32) NOT NULL,
   `refund_index` int(10) unsigned NOT NULL,
-  PRIMARY KEY (`transaction_id`,`output_index`),
+  PRIMARY KEY (`transaction_id`,`output_index`) USING BTREE,
   UNIQUE KEY `refund` (`refund_transaction_id`,`refund_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -116,8 +113,8 @@ CREATE TABLE `qrc20_balance` (
   `address` binary(20) NOT NULL,
   `balance` binary(32) NOT NULL,
   PRIMARY KEY (`contract_address`,`address`),
-  KEY `rich_list` (`contract_address`,`balance` DESC),
-  KEY `address` (`address`)
+  KEY `rich_list` (`contract_address`,`balance` DESC) USING BTREE,
+  KEY `address` (`address`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `qrc721` (
@@ -136,22 +133,25 @@ CREATE TABLE `qrc721_token` (
   KEY `owner` (`holder`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `receipt` (
+CREATE TABLE `evm_receipt` (
   `_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `transaction_id` bigint(20) unsigned NOT NULL,
   `block_height` int(10) unsigned NOT NULL,
   `index_in_block` int(10) unsigned NOT NULL,
   `output_index` int(10) unsigned NOT NULL,
+  `sender_type` tinyint(3) unsigned NOT NULL,
+  `sender_data` varbinary(32) NOT NULL,
   `gas_used` int(10) unsigned NOT NULL,
   `contract_address` binary(20) NOT NULL,
   `excepted` enum('None','Unknown','BadRLP','InvalidFormat','OutOfGasIntrinsic','InvalidSignature','InvalidNonce','NotEnoughCash','OutOfGasBase','BlockGasLimitReached','BadInstruction','BadJumpDestination','OutOfGas','OutOfStack','StackUnderflow','CreateWithValue','NoInformation') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   PRIMARY KEY (`_id`),
-  UNIQUE KEY `output` (`transaction_id`,`output_index`),
+  UNIQUE KEY `output` (`transaction_id`,`output_index`) USING BTREE,
   KEY `contract` (`contract_address`),
-  KEY `block` (`block_height`,`index_in_block`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `block` (`block_height`,`index_in_block`) USING BTREE,
+  KEY `sender` (`sender_data`,`sender_type`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-CREATE TABLE `receipt_log` (
+CREATE TABLE `evm_receipt_log` (
   `_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `receipt_id` bigint(20) unsigned NOT NULL,
   `log_index` int(10) unsigned NOT NULL,
@@ -162,18 +162,18 @@ CREATE TABLE `receipt_log` (
   `topic4` varbinary(32) DEFAULT NULL,
   `data` blob NOT NULL,
   PRIMARY KEY (`_id`),
-  UNIQUE KEY `log` (`receipt_id`,`log_index`),
+  UNIQUE KEY `log` (`receipt_id`,`log_index`) USING BTREE,
   KEY `contract` (`address`),
   KEY `topic1` (`topic1`),
   KEY `topic2` (`topic2`),
   KEY `topic3` (`topic3`),
   KEY `topic4` (`topic4`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=681348 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `rich_list` (
   `address_id` bigint(20) unsigned NOT NULL,
   `balance` bigint(20) unsigned NOT NULL,
-  PRIMARY KEY (`address_id`),
+  PRIMARY KEY (`address_id`) USING BTREE,
   KEY `balance` (`balance` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -196,8 +196,8 @@ CREATE TABLE `transaction` (
   `size` int(10) unsigned NOT NULL,
   `weight` int(10) unsigned NOT NULL,
   PRIMARY KEY (`_id`),
-  UNIQUE KEY `id` (`id`),
-  UNIQUE KEY `block` (`block_height`,`index_in_block`,`_id`)
+  UNIQUE KEY `id` (`id`) USING BTREE,
+  UNIQUE KEY `block` (`block_height`,`index_in_block`,`_id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `transaction_output` (
@@ -215,11 +215,11 @@ CREATE TABLE `transaction_output` (
   `address_id` bigint(20) unsigned NOT NULL,
   `is_stake` tinyint(1) NOT NULL,
   PRIMARY KEY (`_id`),
-  UNIQUE KEY `output` (`output_transaction_id`,`output_index`),
-  UNIQUE KEY `input` (`input_transaction_id`,`input_index`),
-  KEY `rich_list` (`input_height`,`output_height`,`address_id`,`value`),
-  KEY `address` (`address_id`,`input_height`,`output_height`,`value`),
-  KEY `stake` (`output_height`,`is_stake`,`address_id`,`value`)
+  UNIQUE KEY `output` (`output_transaction_id`,`output_index`) USING BTREE,
+  UNIQUE KEY `input` (`input_transaction_id`,`input_index`) USING BTREE,
+  KEY `rich_list` (`input_height`,`output_height`,`address_id`,`value`) USING BTREE,
+  KEY `address` (`address_id`,`input_height`,`output_height`,`value`) USING BTREE,
+  KEY `stake` (`output_height`,`is_stake`,`address_id`,`value`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `witness` (
@@ -227,5 +227,5 @@ CREATE TABLE `witness` (
   `input_index` int(10) unsigned NOT NULL,
   `witness_index` int(10) unsigned NOT NULL,
   `script` blob NOT NULL,
-  PRIMARY KEY (`transaction_id`,`witness_index`,`input_index`)
+  PRIMARY KEY (`transaction_id`,`input_index`,`witness_index`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
