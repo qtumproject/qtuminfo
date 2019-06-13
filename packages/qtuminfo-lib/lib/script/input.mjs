@@ -1,6 +1,7 @@
 import secp256k1 from 'secp256k1'
 import Opcode from './opcode'
 import Script from './script'
+import OutputScript from './output'
 
 const types = {
   UNKNOWN: 'Unknown',
@@ -70,7 +71,7 @@ export default class InputScript extends Script {
     if (!redeemBuffer) {
       return false
     }
-    let redeemScript = Script.fromBuffer(redeemBuffer, {isOutput: true})
+    let redeemScript = OutputScript.fromBuffer(redeemBuffer)
     return redeemScript.isStandard()
   }
 
