@@ -91,7 +91,7 @@ export default class InputScript extends Script {
     if (!redeemBuffer) {
       return false
     }
-    let redeemScript = Script.fromBuffer(redeemBuffer, {isOutput: true})
+    let redeemScript = OutputScript.fromBuffer(redeemBuffer, {isOutput: true})
     return redeemScript.isStandard()
   }
 
