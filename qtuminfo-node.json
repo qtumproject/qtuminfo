@@ -1,0 +1,41 @@
+{
+  "version": "0.0.1",
+  "chain": "mainnet",
+  "services": [
+    "db",
+    "p2p",
+    "header",
+    "block",
+    "transaction",
+    "contract",
+    "mempool",
+    "server"
+  ],
+  "servicesConfig": {
+    "db": {
+      "mysql": {
+        "uri": "mysql://qtum@localhost/qtum_mainnet"
+      },
+      "rpc": {
+        "protocol": "http",
+        "host": "localhost",
+        "port": 3889,
+        "user": "user",
+        "password": "password"
+      }
+    },
+    "p2p": {
+      "peers": [
+        {
+          "ip": {
+            "v4": "127.0.0.1"
+          },
+          "port": 3888
+        }
+      ]
+    },
+    "server": {
+      "port": 3001
+    }
+  }
+}

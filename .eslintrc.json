@@ -52,7 +52,7 @@
     "no-shadow-restricted-names": "error",
     "no-undef-init": "error",
     "no-unused-vars": "warn",
-    "no-use-before-define": ["error", "nofunc"],
+    "no-use-before-define": ["error", {"functions": false, "classes": false}],
     "no-buffer-constructor": "error",
     "no-mixed-requires": "warn",
     "no-new-require": "error",
