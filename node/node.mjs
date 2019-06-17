@@ -112,17 +112,24 @@ export default class Node extends EventEmitter {
     if (this.stopping) {
       return
     }
-    this.logger.info('Beginning shutdown')
-    let services = Node.getServiceOrder(this.#unloadedServices).reverse()
-    this.stopping = true
-    this.emit('stopping')
-    for (let service of services) {
-      if (this.services.has(service.name)) {
-        this.logger.info('Stopping', service.name)
-        await this.services.get(service.name).stop()
-      } else {
-        this.logger.info('Stopping', service.name, '(not started)')
+    try {
+      this.logger.info('Beginning shutdown')
+      let services = Node.getServiceOrder(this.#unloadedServices).reverse()
+      this.stopping = true
+      this.emit('stopping')
+      for (let service of services) {
+        if (this.services.has(service.name)) {
+          this.logger.info('Stopping', service.name)
+          await this.services.get(service.name).stop()
+        } else {
+          this.logger.info('Stopping', service.name, '(not started)')
+        }
       }
+      this.logger.info('Halted')
+      process.exit(0)
+    } catch (err) {
+      this.logger.error('Failed to stop services:', err)
+      process.exit(1)
     }
   }
 }

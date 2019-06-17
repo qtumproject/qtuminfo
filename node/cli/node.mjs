@@ -60,31 +60,16 @@ export default class QtumNode {
     return result
   }
 
-  async cleanShutdown() {
-    try {
-      await this.#node.stop()
-      this.logger.info('Halted')
-      process.exit(0)
-    } catch (err) {
-      this.logger.error('Failed to stop services:', err)
-      process.exit(1)
-    }
-  }
-
   exitHandler({sigint}, err) {
     if (err) {
       this.logger.error('Uncaught exception:', err)
       if (err.stack) {
         this.logger.error(err.stack)
       }
-      this.#node.stop().then(
-        () => process.exit(-1),
-        err => this.logger.error('Failed to stop services:', err)
-      )
-    }
-    if (sigint && !this.#shuttingDown) {
+      this.#node.stop()
+    } else if (sigint && !this.#shuttingDown) {
       this.#shuttingDown = true
-      this.cleanShutdown()
+      this.#node.stop()
     }
   }
 
