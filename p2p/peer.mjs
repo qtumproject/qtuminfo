@@ -14,7 +14,7 @@ const status = {
 export default class Peer extends EventEmitter {
   #socket = null
   #host = '127.0.0.1'
-  #port = 3888
+  port = 3888
   status = status.DISCONNECTED
   #messages = null
   #receiveBuffer = new BufferReader(Buffer.alloc(0))
@@ -29,12 +29,12 @@ export default class Peer extends EventEmitter {
     if (socket) {
       this.#socket = socket
       this.#host = this.#socket.remoteAddress
-      this.#port = this.#socket.remotePort
+      this.port = this.#socket.remotePort
       this.status = status.CONNECTED
       this.addSocketEventHandlers()
     } else {
       this.#host = host
-      this.#port = port || this.chain.port
+      this.port = port || this.chain.port
     }
     this.#messages = new Messages({chain: this.chain})
 
@@ -67,7 +67,7 @@ export default class Peer extends EventEmitter {
       this.sendVersion()
     })
     this.addSocketEventHandlers()
-    this.#socket.connect(this.#port, this.#host)
+    this.#socket.connect(this.port, this.#host)
   }
 
   disconnect() {
