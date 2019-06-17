@@ -479,7 +479,11 @@ export default class TransactionService extends Service {
         let output = tx.outputs[indices[i]]
         let sender
         let refunder = refunderMap.get(tx.id.toString('hex'))
-        if (output.scriptPubKey.isEVMContractCreate() || output.scriptPubKey.isEVMContractCall()) {
+        let hasOpSender = [
+          OutputScript.EVM_CONTRACT_CREATE_SENDER,
+          OutputScript.EVM_CONTRACT_CALL_SENDER
+        ].includes(output.scriptPubKey.type)
+        if (!hasOpSender) {
           sender = new Address({type: refunder.type, data: refunder.data, chain: this.chain})
         } else {
           sender = new Address({
@@ -495,11 +499,11 @@ export default class TransactionService extends Service {
         }
         let {gasUsed, contractAddress, excepted, log: logs} = blockReceipts[index][i]
         if (excepted !== 'Unknown') {
-          let gasLimit = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[1].buffer, 'hex')
+          let gasLimit = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[hasOpSender ? 5 : 1].buffer, 'hex')
             .reverse()
             .toString('hex')
           }`)
-          let gasPrice = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[2].buffer, 'hex')
+          let gasPrice = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[hasOpSender ? 6 : 2].buffer, 'hex')
             .reverse()
             .toString('hex')
           }`)
