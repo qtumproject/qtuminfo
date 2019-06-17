@@ -1,6 +1,6 @@
 import assert from 'assert'
 import Sequelize from 'sequelize'
-import {Address, Script} from 'qtuminfo-lib'
+import {Address, Script, OutputScript} from 'qtuminfo-lib'
 import Service from './base'
 
 const {gt: $gt, in: $in} = Sequelize.Op
@@ -398,9 +398,12 @@ export default class TransactionService extends Service {
         contractSpends.push({sourceTxId: tx.id, destTxId: block.transactions[lastTransactionIndex].id})
       } else {
         lastTransactionIndex = i
-        if (tx.outputs.some(
-          output => output.scriptPubKey.isEVMContractCreate() || output.scriptPubKey.isEVMContractCall()
-        )) {
+        if (tx.outputs.some(output => [
+          OutputScript.EVM_CONTRACT_CREATE,
+          OutputScript.EVM_CONTRACT_CREATE_SENDER,
+          OutputScript.EVM_CONTRACT_CALL,
+          OutputScript.EVM_CONTRACT_CALL_SENDER
+        ].includes(output.scriptPubKey.type))) {
           receiptIndices.push(i)
         }
       }
@@ -463,7 +466,12 @@ export default class TransactionService extends Service {
       let tx = block.transactions[indexInBlock]
       let indices = []
       for (let i = 0; i < tx.outputs.length; ++i) {
-        if (tx.outputs[i].scriptPubKey.isEVMContractCreate() || tx.outputs[i].scriptPubKey.isEVMContractCall()) {
+        if ([
+          OutputScript.EVM_CONTRACT_CREATE,
+          OutputScript.EVM_CONTRACT_CREATE_SENDER,
+          OutputScript.EVM_CONTRACT_CALL,
+          OutputScript.EVM_CONTRACT_CALL_SENDER
+        ].includes(tx.outputs[i].scriptPubKey.type)) {
           indices.push(i)
         }
       }
@@ -481,7 +489,7 @@ export default class TransactionService extends Service {
               Address.PAY_TO_WITNESS_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_KEY_HASH
             ][Script.parseNumberChunk(output.scriptPubKey.chunks[0])],
-            data: output.scriptPubKey.chunks[1],
+            data: output.scriptPubKey.chunks[1].buffer,
             chain: this.chain
           })
         }

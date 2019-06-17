@@ -174,6 +174,14 @@ export default class Opcode {
     return this.code === opcodes.OP_0 || this.code >= opcodes.OP_1 && this.code <= opcodes.OP_16
   }
 
+  toSmallInt() {
+    if (this.code === opcodes.OP_0) {
+      return 0
+    } else if (this.code >= opcodes.OP_1 && this.code <= opcodes.OP_16) {
+      return this.code - opcodes.OP_1 + 1
+    }
+  }
+
   [util.inspect.custom]() {
     return `<Opcode ${this.toString()}>`
   }

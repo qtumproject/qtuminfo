@@ -86,11 +86,12 @@ export default class Script {
   }
 
   static parseNumberChunk(chunk) {
-    if (/^OP_\d+$/.test(chunk)) {
-      return Number.parseInt(chunk.slice(3))
+    let code = new Opcode(chunk.code)
+    if (code.isSmallInt()) {
+      return code.toSmallInt()
     } else {
       return Number.parseInt(
-        Buffer.from(chunk, 'hex')
+        Buffer.from(chunk.buffer, 'hex')
           .reverse()
           .toString('hex'),
         16

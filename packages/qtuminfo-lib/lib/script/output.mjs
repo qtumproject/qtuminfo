@@ -58,6 +58,18 @@ export default class OutputScript extends Script {
   }
 
   toString() {
+    function parseNumberChunk(chunk) {
+      if (/^OP_\d+$/.test(chunk)) {
+        return Number.parseInt(chunk.slice(3))
+      } else {
+        return Number.parseInt(
+          Buffer.from(chunk, 'hex')
+            .reverse()
+            .toString('hex'),
+          16
+        )
+      }
+    }
     let chunks = this.chunks.map(({code, buffer}) => {
       if (buffer) {
         return buffer.toString('hex')
@@ -69,7 +81,7 @@ export default class OutputScript extends Script {
     })
     if (['OP_CREATE', 'OP_CALL'].includes(chunks[chunks.length - 1])) {
       for (let i = 0; i < 3; ++i) {
-        chunks[i] = Script.parseNumberChunk(chunks[i])
+        chunks[i] = parseNumberChunk(chunks[i])
       }
     }
     return chunks.join(' ')
