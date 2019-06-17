@@ -493,31 +493,24 @@ export default class TransactionService extends Service {
           OutputScript.EVM_CONTRACT_CREATE_SENDER,
           OutputScript.EVM_CONTRACT_CALL_SENDER
         ].includes(output.scriptPubKey.type)
-        if (!hasOpSender) {
-          sender = new Address({type: refunder.type, data: refunder.data, chain: this.chain})
-        } else {
+        if (hasOpSender) {
           sender = new Address({
             type: [
               Address.PAY_TO_PUBLIC_KEY_HASH,
               Address.PAY_TO_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_KEY_HASH
-            ][OutputScript.parseNumberChunk(output.scriptPubKey.chunks[0])],
-            data: output.scriptPubKey.chunks[1].buffer,
+            ][output.scriptPubKey.addressType],
+            data: output.scriptPubKey.addressData,
             chain: this.chain
           })
+        } else {
+          sender = new Address({type: refunder.type, data: refunder.data, chain: this.chain})
         }
         let {gasUsed, contractAddress, excepted, log: logs} = blockReceipts[index][i]
         if (excepted !== 'Unknown') {
-          let gasLimit = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[hasOpSender ? 5 : 1].buffer, 'hex')
-            .reverse()
-            .toString('hex')
-          }`)
-          let gasPrice = BigInt(`0x${Buffer.from(output.scriptPubKey.chunks[hasOpSender ? 6 : 2].buffer, 'hex')
-            .reverse()
-            .toString('hex')
-          }`)
-          let refundValue = gasPrice * (gasLimit - BigInt(gasUsed))
+          let {gasLimit, gasPrice} = output.scriptPubKey
+          let refundValue = BigInt(gasPrice * (gasLimit - gasUsed))
           if (refundValue) {
             let txoIndex = refundTxos.findIndex(txo => txo.value === refundValue && txo.addressId === refunder._id)
             if (txoIndex === -1) {

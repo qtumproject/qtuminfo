@@ -105,8 +105,8 @@ export default class ContractService extends Service {
               Address.PAY_TO_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_KEY_HASH
-            ][OutputScript.parseNumberChunk(output.scriptPubKey.chunks[0])],
-            data: output.scriptPubKey.chunks[1].buffer,
+            ][output.scriptPubKey.addressType],
+            data: output.scriptPubKey.addressData,
             chain: this.chain
           })
           let contract = await this._createContract(address, 'evm')
