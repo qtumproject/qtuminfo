@@ -114,12 +114,11 @@ export default class TransactionService extends Service {
     }
     try {
       let newTransactions = await this._processBlock(block)
-      await this.processOutputs(newTransactions, block)
-      await this.processInputs(newTransactions, block)
+      await this.processTxos(newTransactions, block)
       if (this.#synced) {
-        await this.processBalanceChanges(block, newTransactions)
+        await this.processBalanceChanges({block, transactions: newTransactions})
       } else {
-        await this.processBalanceChanges(block)
+        await this.processBalanceChanges({block})
       }
       await this._processContracts(block)
       this.#tip.height = block.height
@@ -166,6 +165,7 @@ export default class TransactionService extends Service {
 
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
+        tx.blockHeight = block.height
         tx.indexInBlock = index
         txs.push({
           id: tx.id,
@@ -199,6 +199,7 @@ export default class TransactionService extends Service {
     } else {
       for (let index = 0; index < block.transactions.length; ++index) {
         let tx = block.transactions[index]
+        tx.blockHeight = block.height
         tx.indexInBlock = index
         newTransactions.push(tx)
         txs.push({
@@ -232,7 +233,7 @@ export default class TransactionService extends Service {
     return newTransactions
   }
 
-  async processOutputs(transactions, block) {
+  async processTxos(transactions) {
     let addressMap = new Map()
     let addressIds = []
     for (let index = 0; index < transactions.length; ++index) {
@@ -251,7 +252,7 @@ export default class TransactionService extends Service {
               type: address.type,
               data: address.data,
               string: address.toString(),
-              createHeight: block.height,
+              createHeight: tx.blockHeight,
               createIndex: index,
               indices: [[index, outputIndex]]
             })
@@ -290,6 +291,7 @@ export default class TransactionService extends Service {
     }
 
     let outputTxos = []
+    let mappings = []
     for (let index = 0; index < transactions.length; ++index) {
       let tx = transactions[index]
       for (let outputIndex = 0; outputIndex < tx.outputs.length; ++outputIndex) {
@@ -298,27 +300,19 @@ export default class TransactionService extends Service {
           outputTxId: tx.id,
           outputIndex,
           scriptPubKey: output.scriptPubKey.toBuffer(),
-          outputHeight: block.height,
+          outputHeight: tx.blockHeight,
           value: output.value,
           addressId: addressIds[index][outputIndex],
-          isStake: tx.indexInBlock === 0 || block.height > 5000 && tx.indexInBlock === 1
+          isStake: tx.indexInBlock === 0 || tx.blockHeight > 5000 && tx.indexInBlock === 1
         })
       }
-    }
-    await this.#TransactionOutput.bulkCreate(outputTxos, {validate: false})
-  }
-
-  async processInputs(transactions, block) {
-    let mappingId = uuidv4().replace(/-/g, '')
-    let mappings = []
-    for (let tx of transactions) {
       if (tx.inputs[0].scriptSig.type === InputScript.COINBASE) {
         await this.#TransactionOutput.create({
           inputTxId: tx.id,
           inputIndex: 0,
           scriptSig: tx.inputs[0].scriptSig.toBuffer(),
           sequence: tx.inputs[0].sequence,
-          inputHeight: block.height,
+          inputHeight: tx.blockHeight,
           value: 0n,
           addressId: '0',
           isStake: false
@@ -334,24 +328,29 @@ export default class TransactionService extends Service {
           outputIndex: input.outputIndex,
           scriptSig: input.scriptSig.toBuffer(),
           sequence: input.sequence,
-          inputHeight: block.height
+          inputHeight: tx.blockHeight
         })
       }
     }
-    if (mappings.length) {
-      await this.#db.query(`
-        INSERT INTO transaction_output_mapping (
-          _id, input_transaction_id, input_index, output_transaction_id, output_index,
-          scriptsig, sequence, input_height
-        ) VALUES
-        ${mappings.map(item => `(
-          '${mappingId}',
-          X'${item.inputTxId.toString('hex')}', ${item.inputIndex},
-          X'${item.outputTxId.toString('hex')}', ${item.outputIndex},
-          X'${item.scriptSig.toString('hex')}', ${item.sequence}, ${item.inputHeight}
-        )`)}
-      `)
-    }
+
+    let mappingId = uuidv4().replace(/-/g, '')
+    await Promise.all([
+      this.#TransactionOutput.bulkCreate(outputTxos, {validate: false}),
+      ...mappings.length ? [
+        await this.#db.query(`
+          INSERT INTO transaction_output_mapping (
+            _id, input_transaction_id, input_index, output_transaction_id, output_index,
+            scriptsig, sequence, input_height
+          ) VALUES
+          ${mappings.map(item => `(
+            '${mappingId}',
+            X'${item.inputTxId.toString('hex')}', ${item.inputIndex},
+            X'${item.outputTxId.toString('hex')}', ${item.outputIndex},
+            X'${item.scriptSig.toString('hex')}', ${item.sequence}, ${item.inputHeight}
+          )`)}
+        `)
+      ] : []
+    ])
     await this.#db.query(`
       UPDATE transaction_output txo, transaction_output_mapping mapping
       SET
@@ -372,13 +371,13 @@ export default class TransactionService extends Service {
     }
   }
 
-  async processBalanceChanges(block, transactions) {
+  async processBalanceChanges({block, transactions}) {
     let filters
     if (transactions) {
       if (transactions.length === 0) {
         return
       }
-      if (block.height < 0xffffffff) {
+      if (block) {
         await this.#db.query(`
           UPDATE balance_change balance, transaction tx
           SET balance.block_height = ${block.height}, balance.index_in_block = tx.index_in_block
@@ -424,7 +423,7 @@ export default class TransactionService extends Service {
       await t.rollback()
       throw err
     }
-    if (transactions && block.height < 0xffffffff) {
+    if (transactions && block) {
       await this.#db.query(`
         UPDATE address SET create_index = (
           SELECT index_in_block FROM balance_change

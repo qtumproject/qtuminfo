@@ -48,6 +48,7 @@ export default class MempoolService extends Service {
   }
 
   async _onTransaction(tx) {
+    tx.blockHeight = 0xffffffff
     try {
       if (!await this._validate(tx)) {
         return
@@ -77,10 +78,9 @@ export default class MempoolService extends Service {
       }
       await Promise.all([
         this.#Witness.bulkCreate(witnesses, {validate: false}),
-        this.#transaction.processOutputs([tx], {height: 0xffffffff}),
-        this.#transaction.processInputs([tx], {height: 0xffffffff})
+        this.#transaction.processTxos([tx]),
       ])
-      await this.#transaction.processBalanceChanges({height: 0xffffffff}, [tx])
+      await this.#transaction.processBalanceChanges({transactions: [tx]})
 
       for (let subscription of this.subscriptions.transaction) {
         subscription.emit('mempool/transaction', tx)
