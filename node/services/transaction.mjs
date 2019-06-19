@@ -1,5 +1,6 @@
 import assert from 'assert'
 import Sequelize from 'sequelize'
+import uuidv4 from 'uuid/v4'
 import {Address, InputScript, OutputScript} from '../../lib'
 import Service from './base'
 
@@ -13,6 +14,7 @@ export default class TransactionService extends Service {
   #Transaction = null
   #Witness = null
   #TransactionOutput = null
+  #TransactionOutputMapping = null
   #BalanceChange = null
   #GasRefund = null
   #ContractSpend = null
@@ -29,6 +31,7 @@ export default class TransactionService extends Service {
     this.#Transaction = this.node.getModel('transaction')
     this.#Witness = this.node.getModel('witness')
     this.#TransactionOutput = this.node.getModel('transaction_output')
+    this.#TransactionOutputMapping = this.node.getModel('transaction_output_mapping')
     this.#BalanceChange = this.node.getModel('balance_change')
     this.#GasRefund = this.node.getModel('gas_refund')
     this.#ContractSpend = this.node.getModel('contract_spend')
@@ -39,6 +42,7 @@ export default class TransactionService extends Service {
     if (this.#tip.height > blockTip.height) {
       this.#tip = {height: blockTip.height, hash: blockTip.hash}
     }
+    await this.#TransactionOutputMapping.destroy({truncate: true})
     await this.#TransactionOutput.destroy({
       where: {
         outputTxId: null,
@@ -305,30 +309,67 @@ export default class TransactionService extends Service {
   }
 
   async processInputs(transactions, block) {
-    let inputTxos = []
+    let mappingId = uuidv4().replace(/-/g, '')
+    let mappings = []
     for (let tx of transactions) {
-      for (let index = 0; index < tx.inputs.length; ++index) {
-        let input = tx.inputs[index]
-        inputTxos.push({
-          ...input.scriptSig.type === InputScript.COINBASE ? {} : {
-            outputTxId: input.prevTxId,
-            outputIndex: input.outputIndex
-          },
+      if (tx.inputs[0].scriptSig.type === InputScript.COINBASE) {
+        await this.#TransactionOutput.create({
           inputTxId: tx.id,
-          inputIndex: index,
-          scriptSig: input.scriptSig.toBuffer(),
-          sequence: input.sequence,
+          inputIndex: 0,
+          scriptSig: tx.inputs[0].scriptSig.toBuffer(),
+          sequence: tx.inputs[0].sequence,
           inputHeight: block.height,
           value: 0n,
           addressId: '0',
           isStake: false
         })
+        continue
+      }
+      for (let index = 0; index < tx.inputs.length; ++index) {
+        let input = tx.inputs[index]
+        mappings.push({
+          inputTxId: tx.id,
+          inputIndex: index,
+          outputTxId: input.prevTxId,
+          outputIndex: input.outputIndex,
+          scriptSig: input.scriptSig.toBuffer(),
+          sequence: input.sequence,
+          inputHeight: block.height
+        })
       }
     }
-    await this.#TransactionOutput.bulkCreate(inputTxos, {
-      updateOnDuplicate: ['inputTxId', 'inputIndex', 'scriptSig', 'sequence', 'inputHeight'],
-      validate: false
-    })
+    if (mappings.length) {
+      await this.#db.query(`
+        INSERT INTO transaction_output_mapping (
+          _id, input_transaction_id, input_index, output_transaction_id, output_index,
+          scriptsig, sequence, input_height
+        ) VALUES
+        ${mappings.map(item => `(
+          '${mappingId}',
+          X'${item.inputTxId.toString('hex')}', ${item.inputIndex},
+          X'${item.outputTxId.toString('hex')}', ${item.outputIndex},
+          X'${item.scriptSig.toString('hex')}', ${item.sequence}, ${item.inputHeight}
+        )`)}
+      `)
+    }
+    await this.#db.query(`
+      UPDATE transaction_output txo, transaction_output_mapping mapping
+      SET
+        txo.input_transaction_id = mapping.input_transaction_id,
+        txo.input_index = mapping.input_index,
+        txo.scriptsig = mapping.scriptsig,
+        txo.sequence = mapping.sequence,
+        txo.input_height = mapping.input_height
+      WHERE txo.output_transaction_id = mapping.output_transaction_id AND txo.output_index = mapping.output_index
+    `)
+    let t = await this.#db.transaction({isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.READ_UNCOMMITTED})
+    try {
+      await this.#TransactionOutputMapping.destroy({where: {_id: mappingId}, transaction: t})
+      await t.commit()
+    } catch (err) {
+      await t.rollback()
+      throw err
+    }
   }
 
   async processBalanceChanges(block, transactions) {
@@ -356,35 +397,33 @@ export default class TransactionService extends Service {
       ]
     }
 
-    let result = await this.#db.query(`
-      SELECT
-        tx._id AS transactionId,
-        tx.block_height AS blockHeight,
-        tx.index_in_block AS indexInBlock,
-        block_balance.address_id AS addressId,
-        SUM(block_balance.value) AS value
-      FROM (
-        SELECT output_transaction_id AS transaction_id, address_id, value
-        FROM transaction_output
-        WHERE ${filters[0]}
-        UNION ALL
-        SELECT input_transaction_id AS transaction_id, address_id, -value AS value
-        FROM transaction_output
-        WHERE ${filters[1]}
-      ) AS block_balance
-      LEFT JOIN transaction tx ON tx.id = block_balance.transaction_id
-      GROUP BY tx._id, block_balance.address_id
-    `, {type: this.#db.QueryTypes.SELECT})
-    await this.#BalanceChange.bulkCreate(
-      result.map(item => ({
-        transactionId: item.transactionId,
-        blockHeight: item.blockHeight,
-        indexInBlock: item.indexInBlock,
-        addressId: item.addressId,
-        value: item.value
-      })),
-      {validate: false}
-    )
+    let t = await this.#db.transaction({isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.READ_UNCOMMITTED})
+    try {
+      await this.#db.query(`
+        INSERT INTO balance_change (transaction_id, block_height, index_in_block, address_id, value)
+        SELECT
+          tx._id AS transactionId,
+          tx.block_height AS blockHeight,
+          tx.index_in_block AS indexInBlock,
+          block_balance.address_id AS addressId,
+          SUM(block_balance.value) AS value
+        FROM (
+          SELECT output_transaction_id AS transaction_id, address_id, value
+          FROM transaction_output
+          WHERE ${filters[0]}
+          UNION ALL
+          SELECT input_transaction_id AS transaction_id, address_id, -value AS value
+          FROM transaction_output
+          WHERE ${filters[1]}
+        ) AS block_balance
+        LEFT JOIN transaction tx ON tx.id = block_balance.transaction_id
+        GROUP BY tx._id, block_balance.address_id
+      `)
+      await t.commit()
+    } catch (err) {
+      await t.rollback()
+      throw err
+    }
     if (transactions && block.height < 0xffffffff) {
       await this.#db.query(`
         UPDATE address SET create_index = (

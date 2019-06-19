@@ -10,11 +10,13 @@ export default function generate(sequelize) {
     outputTxId: {
       type: Sequelize.STRING(32).BINARY,
       field: 'output_transaction_id',
-      primaryKey: true
+      allowNull: true,
+      unique: true
     },
     outputIndex: {
       type: Sequelize.INTEGER.UNSIGNED,
-      primaryKey: true
+      allowNull: true,
+      unique: true
     },
     scriptPubKey: {
       type: Sequelize.BLOB('medium'),
@@ -61,6 +63,29 @@ export default function generate(sequelize) {
     },
     addressId: Sequelize.BIGINT.UNSIGNED,
     isStake: Sequelize.BOOLEAN
+  }, {freezeTableName: true, underscored: true, timestamps: false})
+
+  sequelize.define('transaction_output_mapping', {
+    _id: {
+      type: Sequelize.CHAR(32),
+      field: '_id'
+    },
+    inputTxId: {
+      type: Sequelize.STRING(32).BINARY,
+      field: 'input_transaction_id'
+    },
+    inputIndex: Sequelize.INTEGER.UNSIGNED,
+    outputTxId: {
+      type: Sequelize.STRING(32).BINARY,
+      field: 'output_transaction_id'
+    },
+    outputIndex: Sequelize.INTEGER.UNSIGNED,
+    scriptSig: {
+      type: Sequelize.BLOB('medium'),
+      field: 'scriptsig'
+    },
+    sequence: Sequelize.INTEGER.UNSIGNED,
+    inputHeight: Sequelize.INTEGER.UNSIGNED
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
   sequelize.models.transaction.hasMany(TransactionOutput, {as: 'outputs', foreignKey: 'outputTxId', sourceKey: 'id'})
