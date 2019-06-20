@@ -185,16 +185,7 @@ export default class TransactionService extends Service {
           await this.removeReplacedTransactions(tx)
         }
         newTransactions.push(tx)
-        for (let i = 0; i < tx.witnesses.length; ++i) {
-          for (let j = 0; j < tx.witnesses[i].length; ++j) {
-            witnesses.push({
-              transactionId: tx.id,
-              inputIndex: i,
-              witnessIndex: j,
-              script: tx.witnesses[i][j]
-            })
-          }
-        }
+        witnesses.push(...this.groupWitnesses(tx))
       }
     } else {
       for (let index = 0; index < block.transactions.length; ++index) {
@@ -213,16 +204,7 @@ export default class TransactionService extends Service {
           size: tx.size,
           weight: tx.weight
         })
-        for (let i = 0; i < tx.witnesses.length; ++i) {
-          for (let j = 0; j < tx.witnesses[i].length; ++j) {
-            witnesses.push({
-              transactionId: tx.id,
-              inputIndex: i,
-              witnessIndex: j,
-              script: tx.witnesses[i][j]
-            })
-          }
-        }
+        witnesses.push(...this.groupWitnesses(tx))
       }
     }
     await this.#Transaction.bulkCreate(txs, {
@@ -632,5 +614,20 @@ export default class TransactionService extends Service {
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.id = 0x${id.toString('hex')}
     `)
+  }
+
+  groupWitnesses(tx) {
+    let witnesses = []
+    for (let i = 0; i < tx.inputs.length; ++i) {
+      for (let j = 0; j < tx.inputs[i].witness.length; ++j) {
+        witnesses.push({
+          transactionId: tx.id,
+          inputIndex: i,
+          witnessIndex: j,
+          script: tx.inputs[i].witness[j]
+        })
+      }
+    }
+    return witnesses
   }
 }

@@ -54,7 +54,6 @@ export default class MempoolService extends Service {
         return
       }
       await this.#transaction.removeReplacedTransactions(tx)
-      let witnesses = []
       await this.#Transaction.create({
         id: tx.id,
         hash: tx.hash,
@@ -66,16 +65,7 @@ export default class MempoolService extends Service {
         size: tx.size,
         weight: tx.weight
       })
-      for (let i = 0; i < tx.witnesses.length; ++i) {
-        for (let j = 0; j < tx.witnesses[i].length; ++j) {
-          witnesses.push({
-            transactionId: tx.id,
-            inputIndex: i,
-            witnessIndex: j,
-            script: tx.witnesses[i][j]
-          })
-        }
-      }
+      let witnesses = this.#transaction.groupWitnesses(tx)
       await Promise.all([
         this.#Witness.bulkCreate(witnesses, {validate: false}),
         this.#transaction.processTxos([tx]),
