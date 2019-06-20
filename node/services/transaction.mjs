@@ -337,7 +337,7 @@ export default class TransactionService extends Service {
     await Promise.all([
       this.#TransactionOutput.bulkCreate(outputTxos, {validate: false}),
       ...mappings.length ? [
-        await this.#db.query(`
+        this.#db.query(`
           INSERT INTO transaction_output_mapping (
             _id, input_transaction_id, input_index, output_transaction_id, output_index,
             scriptsig, sequence, input_height
