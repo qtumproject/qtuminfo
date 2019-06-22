@@ -61,14 +61,14 @@ export default class QtumNode {
   }
 
   exitHandler({sigint}, err) {
-    if (err) {
+    if (sigint && !this.#shuttingDown) {
+      this.#shuttingDown = true
+      this.#node.stop()
+    } else if (err) {
       this.logger.error('Uncaught exception:', err)
       if (err.stack) {
         this.logger.error(err.stack)
       }
-      this.#node.stop()
-    } else if (sigint && !this.#shuttingDown) {
-      this.#shuttingDown = true
       this.#node.stop()
     }
   }
