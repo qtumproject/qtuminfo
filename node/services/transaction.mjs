@@ -308,48 +308,47 @@ export default class TransactionService extends Service {
           inputIndex: index,
           outputTxId: input.prevTxId,
           outputIndex: input.outputIndex,
-          scriptSig: input.scriptSig.toBuffer(),
+          scriptSig: input.scriptSig,
           sequence: input.sequence,
           inputHeight: tx.blockHeight
         })
       }
     }
 
-    let mappingId = uuidv4().replace(/-/g, '')
-    await Promise.all([
-      this.#TransactionOutput.bulkCreate(outputTxos, {validate: false}),
-      ...mappings.length ? [
-        this.#db.query(`
-          INSERT INTO transaction_output_mapping (
-            _id, input_transaction_id, input_index, output_transaction_id, output_index,
-            scriptsig, sequence, input_height
-          ) VALUES
-          ${mappings.map(item => `(
-            '${mappingId}',
-            X'${item.inputTxId.toString('hex')}', ${item.inputIndex},
-            X'${item.outputTxId.toString('hex')}', ${item.outputIndex},
-            X'${item.scriptSig.toString('hex')}', ${item.sequence}, ${item.inputHeight}
-          )`)}
+    await this.#TransactionOutput.bulkCreate(outputTxos, {validate: false})
+    if (mappings.length) {
+      let mappingId = uuidv4().replace(/-/g, '')
+      await this.#db.query(`
+        INSERT INTO transaction_output_mapping (
+          _id, input_transaction_id, input_index, output_transaction_id, output_index,
+          scriptsig, sequence, input_height
+        ) VALUES
+        ${mappings.map(item => `(
+          '${mappingId}',
+          X'${item.inputTxId.toString('hex')}', ${item.inputIndex},
+          X'${item.outputTxId.toString('hex')}', ${item.outputIndex},
+          X'${item.scriptSig.toString('hex')}', ${item.sequence}, ${item.inputHeight}
+        )`)}
+      `)
+      let t = await this.#db.transaction({isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.READ_UNCOMMITTED})
+      try {
+        await this.#db.query(`
+          UPDATE transaction_output txo, transaction_output_mapping mapping
+          SET
+            txo.input_transaction_id = mapping.input_transaction_id,
+            txo.input_index = mapping.input_index,
+            txo.scriptsig = mapping.scriptsig,
+            txo.sequence = mapping.sequence,
+            txo.input_height = mapping.input_height
+          WHERE mapping._id = '${mappingId}' AND txo.output_index = mapping.output_index
+            AND txo.output_transaction_id = mapping.output_transaction_id
         `)
-      ] : []
-    ])
-    await this.#db.query(`
-      UPDATE transaction_output txo, transaction_output_mapping mapping
-      SET
-        txo.input_transaction_id = mapping.input_transaction_id,
-        txo.input_index = mapping.input_index,
-        txo.scriptsig = mapping.scriptsig,
-        txo.sequence = mapping.sequence,
-        txo.input_height = mapping.input_height
-      WHERE txo.output_transaction_id = mapping.output_transaction_id AND txo.output_index = mapping.output_index
-    `)
-    let t = await this.#db.transaction({isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.READ_UNCOMMITTED})
-    try {
-      await this.#TransactionOutputMapping.destroy({where: {_id: mappingId}, transaction: t})
-      await t.commit()
-    } catch (err) {
-      await t.rollback()
-      throw err
+        await this.#TransactionOutputMapping.destroy({where: {_id: mappingId}, transaction: t})
+        await t.commit()
+      } catch (err) {
+        await t.rollback()
+        throw err
+      }
     }
   }
 
