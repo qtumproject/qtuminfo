@@ -1,7 +1,7 @@
 import assert from 'assert'
 import Sequelize from 'sequelize'
 import uuidv4 from 'uuid/v4'
-import {Address, InputScript, OutputScript} from '../../lib'
+import {Address, Opcode, OutputScript} from '../../lib'
 import Service from './base'
 
 const {gt: $gt, in: $in} = Sequelize.Op
@@ -288,11 +288,11 @@ export default class TransactionService extends Service {
           isStake: tx.indexInBlock === 0 || tx.blockHeight > 5000 && tx.indexInBlock === 1
         })
       }
-      if (tx.inputs[0].scriptSig.type === InputScript.COINBASE) {
+      if (Buffer.compare(tx.inputs[0].prevTxId, Buffer.alloc(32)) === 0 && tx.inputs[0].outputIndex === 0xffffffff) {
         await this.#TransactionOutput.create({
           inputTxId: tx.id,
           inputIndex: 0,
-          scriptSig: tx.inputs[0].scriptSig.toBuffer(),
+          scriptSig: tx.inputs[0].scriptSig,
           sequence: tx.inputs[0].sequence,
           inputHeight: tx.blockHeight,
           value: 0n,
@@ -423,7 +423,10 @@ export default class TransactionService extends Service {
     let lastTransactionIndex = 0
     for (let i = 0; i < block.transactions.length; ++i) {
       let tx = block.transactions[i]
-      if (tx.inputs[0].scriptSig.type === InputScript.CONTRACT_SPEND) {
+      if (Buffer.compare(tx.inputs[0].prevTxId, Buffer.alloc(32)) === 0 && tx.inputs[0].outputIndex === 0xffffffff) {
+        continue
+      }
+      if (tx.inputs[0].scriptSig.length === 1 && tx.inputs[0].scriptSig[0] === Opcode.OP_SPEND) {
         contractSpends.push({sourceTxId: tx.id, destTxId: block.transactions[lastTransactionIndex].id})
       } else {
         lastTransactionIndex = i
