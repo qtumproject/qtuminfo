@@ -530,7 +530,7 @@ export default class TransactionService extends Service {
           sender = new Address({type: refunder.type, data: refunder.data, chain: this.chain})
         }
         let {gasUsed, contractAddress, excepted, log: logs} = blockReceipts[index][i]
-        if (excepted !== 'Unknown') {
+        if (gasUsed) {
           let {gasLimit, gasPrice} = output.scriptPubKey
           let refundValue = BigInt(gasPrice * (gasLimit - gasUsed))
           if (refundValue) {

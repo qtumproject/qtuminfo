@@ -54,13 +54,10 @@ export default function generate(sequelize) {
     senderData: Sequelize.STRING(32).BINARY,
     gasUsed: Sequelize.INTEGER.UNSIGNED,
     contractAddress: Sequelize.CHAR(20).BINARY,
-    excepted: {
-      type: Sequelize.ENUM,
-      values: [
-        'None', 'Unknown', 'BadRLP', 'InvalidFormat', 'OutOfGasIntrinsic', 'InvalidSignature', 'InvalidNonce',
-        'NotEnoughCash', 'OutOfGasBase', 'BlockGasLimitReached', 'BadInstruction', 'BadJumpDestination',
-        'OutOfGas', 'OutOfStack', 'StackUnderflow', 'CreateWithValue', 'NoInformation'
-      ]
+    excepted: Sequelize.STRING(32),
+    message: {
+      type: Sequelize.BLOB,
+      allowNull: true
     }
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
