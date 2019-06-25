@@ -518,6 +518,7 @@ class TransactionService extends Service {
         if (hasOpSender) {
           sender = new Address({
             type: [
+              null,
               Address.PAY_TO_PUBLIC_KEY_HASH,
               Address.PAY_TO_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_SCRIPT_HASH,
