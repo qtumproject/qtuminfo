@@ -530,7 +530,7 @@ class TransactionService extends Service {
         } else {
           sender = new Address({type: refunder.type, data: refunder.data, chain: this.chain})
         }
-        let {gasUsed, contractAddress, excepted, log: logs} = blockReceipts[index][i]
+        let {gasUsed, contractAddress, excepted, exceptedMessage, log: logs} = blockReceipts[index][i]
         if (gasUsed) {
           let {gasLimit, gasPrice} = output.scriptPubKey
           let refundValue = BigInt(gasPrice * (gasLimit - gasUsed))
@@ -559,7 +559,8 @@ class TransactionService extends Service {
           senderData: sender.data,
           gasUsed,
           contractAddress: Buffer.from(contractAddress, 'hex'),
-          excepted
+          excepted,
+          exceptedMessage
         })
         for (let j = 0; j < logs.length; ++j) {
           let {address, topics, data} = logs[j]

@@ -55,8 +55,8 @@ function generate(sequelize) {
     gasUsed: Sequelize.INTEGER.UNSIGNED,
     contractAddress: Sequelize.CHAR(20).BINARY,
     excepted: Sequelize.STRING(32),
-    message: {
-      type: Sequelize.BLOB,
+    exceptedMessage: {
+      type: Sequelize.TEXT,
       allowNull: true
     }
   }, {freezeTableName: true, underscored: true, timestamps: false})
