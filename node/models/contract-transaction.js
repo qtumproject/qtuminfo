@@ -3,16 +3,15 @@ const Sequelize = require('sequelize')
 function generate(sequelize) {
   let GasRefund = sequelize.define('gas_refund', {
     transactionId: {
-      type: Sequelize.CHAR(32).BINARY,
+      type: Sequelize.BIGINT.UNSIGNED,
       primaryKey: true
     },
     outputIndex: {
       type: Sequelize.INTEGER.UNSIGNED,
       primaryKey: true
     },
-    refundTxId: {
-      type: Sequelize.CHAR(32).BINARY,
-      field: 'refund_transaction_id',
+    refundId: {
+      type: Sequelize.BIGINT.UNSIGNED,
       unique: 'refund'
     },
     refundIndex: {
@@ -22,22 +21,21 @@ function generate(sequelize) {
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
   let ContractSpend = sequelize.define('contract_spend', {
-    sourceTxId: {
-      type: Sequelize.CHAR(32).BINARY,
-      field: 'source_id',
+    sourceId: {
+      type: Sequelize.BIGINT.UNSIGNED,
       primaryKey: true
     },
-    destTxId: {type: Sequelize.CHAR(32).BINARY, field: 'dest_id'}
+    destId: Sequelize.BIGINT.UNSIGNED
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
-  sequelize.models.transaction.hasMany(GasRefund, {as: 'refunds', foreignKey: 'transactionId', sourceKey: 'id'})
-  GasRefund.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId', targetKey: 'id'})
-  sequelize.models.transaction_output.hasOne(GasRefund, {as: 'refund', foreignKey: 'refundTxId', sourceKey: 'outputTxId'})
-  GasRefund.belongsTo(sequelize.models.transaction_output, {as: 'refundTo', foreignKey: 'refundTxId', targetKey: 'outputTxId'})
-  sequelize.models.transaction.hasOne(ContractSpend, {as: 'contractSpendSource', foreignKey: 'sourceTxId', sourceKey: 'id'})
-  ContractSpend.belongsTo(sequelize.models.transaction, {as: 'sourceTransaction', foreignKey: 'sourceTxId', targetKey: 'id'})
-  sequelize.models.transaction.hasMany(ContractSpend, {as: 'contractSpendDests', foreignKey: 'destTxId', sourceKey: 'id'})
-  ContractSpend.belongsTo(sequelize.models.transaction, {as: 'destTransaction', foreignKey: 'destTxId', targetKey: 'id'})
+  sequelize.models.transaction.hasMany(GasRefund, {as: 'refunds', foreignKey: 'transactionId'})
+  GasRefund.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId'})
+  sequelize.models.transaction_output.hasOne(GasRefund, {as: 'refund', foreignKey: 'refundId'})
+  GasRefund.belongsTo(sequelize.models.transaction_output, {as: 'refundTo', foreignKey: 'refundId'})
+  sequelize.models.transaction.hasOne(ContractSpend, {as: 'contractSpendSource', foreignKey: 'sourceId'})
+  ContractSpend.belongsTo(sequelize.models.transaction, {as: 'sourceTransaction', foreignKey: 'sourceId'})
+  sequelize.models.transaction.hasMany(ContractSpend, {as: 'contractSpendDests', foreignKey: 'destId'})
+  ContractSpend.belongsTo(sequelize.models.transaction, {as: 'destTransaction', foreignKey: 'destId'})
 }
 
 module.exports = generate

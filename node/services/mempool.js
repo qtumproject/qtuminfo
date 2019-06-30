@@ -1,10 +1,15 @@
+const Sequelize = require('sequelize')
 const Service = require('./base')
+const {AsyncQueue} = require('../utils')
+
+const {in: $in} = Sequelize.Op
 
 class MempoolService extends Service {
   subscriptions = {transaction: []}
   #transaction = null
   #subscribed = false
   #enabled = false
+  #transactionProcessor = null
   #bus = null
   #db = null
   #Transaction = null
@@ -23,6 +28,7 @@ class MempoolService extends Service {
     this.#db = this.node.getDatabase()
     this.#Transaction = this.node.getModel('transaction')
     this.#Witness = this.node.getModel('witness')
+    this.#transactionProcessor = new AsyncQueue(this._onTransaction.bind(this))
   }
 
   _startSubscriptions() {
@@ -33,7 +39,7 @@ class MempoolService extends Service {
     if (!this.#bus) {
       this.#bus = this.node.openBus({remoteAddress: 'localhost-mempool'})
     }
-    this.#bus.on('p2p/transaction', this._onTransaction.bind(this))
+    this.#bus.on('p2p/transaction', this._queueTransaction.bind(this))
     this.#bus.subscribe('p2p/transaction')
   }
 
@@ -45,6 +51,21 @@ class MempoolService extends Service {
 
   onSynced() {
     this.enable()
+  }
+
+  _queueTransaction(tx) {
+    this.#transactionProcessor.push(tx, err => {
+      if (err) {
+        this._handleError(err)
+      }
+    })
+  }
+
+  _handleError(err) {
+    if (!this.node.stopping) {
+      this.logger.error('Mempool Service: handle error', err)
+      this.node.stop()
+    }
   }
 
   async _onTransaction(tx) {
@@ -76,15 +97,25 @@ class MempoolService extends Service {
         subscription.emit('mempool/transaction', tx)
       }
     } catch (err) {
-      this.logger.error('Mempool Service:', err)
-      this.node.stop()
+      this._handleError(err)
     }
   }
 
   async _validate(tx) {
-    let txos = tx.inputs.map(input => `(0x${input.prevTxId.toString('hex')}, ${input.outputIndex})`).join(', ')
+    let prevTxs = await this.#Transaction.findAll({
+      where: {id: {[$in]: tx.inputs.map(input => input.prevTxId)}},
+      attributes: ['_id', 'id']
+    })
+    let txos = []
+    for (let input of tx.inputs) {
+      let item = prevTxs.find(tx => Buffer.compare(tx.id, input.prevTxId) === 0)
+      if (!item) {
+        return false
+      }
+      txos.push(`(${item._id}, ${input.outputIndex})`)
+    }
     let [{count}] = await this.#db.query(
-      `SELECT COUNT(*) AS count FROM transaction_output WHERE (output_transaction_id, output_index) IN (${txos})`,
+      `SELECT COUNT(*) AS count FROM transaction_output WHERE (transaction_id, output_index) IN (${txos.join(', ')})`,
       {type: this.#db.QueryTypes.SELECT}
     )
     return Number(count) === tx.inputs.length

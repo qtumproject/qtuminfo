@@ -14,7 +14,8 @@ class ContractService extends Service {
   #tip = null
   #db = null
   #Address = null
-  #TransactionOutput = null
+  #Transaction = null
+  #TransactionInput = null
   #EVMReceipt = null
   #EVMReceiptLog = null
   #Contract = null
@@ -32,7 +33,8 @@ class ContractService extends Service {
   async start() {
     this.#db = this.node.getDatabase()
     this.#Address = this.node.getModel('address')
-    this.#TransactionOutput = this.node.getModel('transaction_output')
+    this.#Transaction = this.node.getModel('transaction')
+    this.#TransactionInput = this.node.getModel('transaction_input')
     this.#EVMReceipt = this.node.getModel('evm_receipt')
     this.#EVMReceiptLog = this.node.getModel('evm_receipt_log')
     this.#Contract = this.node.getModel('contract')
@@ -83,15 +85,24 @@ class ContractService extends Service {
         let output = transaction.outputs[i]
         if (output.scriptPubKey.type === OutputScript.EVM_CONTRACT_CREATE) {
           let address = Address.fromScript(output.scriptPubKey, this.chain, transaction.id, i).data
-          let {address: owner} = await this.#TransactionOutput.findOne({
-            where: {inputTxId: transaction.id, inputIndex: 0},
+          let {address: owner} = await this.#TransactionInput.findOne({
+            where: {inputIndex: 0},
             attributes: [],
-            include: [{
-              model: this.#Address,
-              as: 'address',
-              required: true,
-              attributes: ['data']
-            }]
+            include: [
+              {
+                model: this.#Transaction,
+                as: 'transaction',
+                required: true,
+                where: {id: transaction.id},
+                attributes: []
+              },
+              {
+                model: this.#Address,
+                as: 'address',
+                required: true,
+                attributes: ['data']
+              }
+            ]
           })
           let contract = await this._createContract(address, 'evm')
           if (contract && contract.type === 'qrc20') {
@@ -101,6 +112,7 @@ class ContractService extends Service {
           let address = Address.fromScript(output.scriptPubKey, this.chain, transaction.id, i).data
           let owner = new Address({
             type: [
+              null,
               Address.PAY_TO_PUBLIC_KEY_HASH,
               Address.PAY_TO_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_SCRIPT_HASH,

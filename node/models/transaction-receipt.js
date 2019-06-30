@@ -33,12 +33,12 @@ function generate(sequelize) {
       type: Sequelize.BIGINT.UNSIGNED,
       unique: 'transaction'
     },
-    blockHeight: Sequelize.INTEGER.UNSIGNED,
-    indexInBlock: Sequelize.INTEGER.UNSIGNED,
     outputIndex: {
       type: Sequelize.INTEGER.UNSIGNED,
       unique: 'transaction'
     },
+    blockHeight: Sequelize.INTEGER.UNSIGNED,
+    indexInBlock: Sequelize.INTEGER.UNSIGNED,
     senderType: {
       type: Sequelize.INTEGER(3).UNSIGNED,
       get() {
@@ -55,10 +55,7 @@ function generate(sequelize) {
     gasUsed: Sequelize.INTEGER.UNSIGNED,
     contractAddress: Sequelize.CHAR(20).BINARY,
     excepted: Sequelize.STRING(32),
-    exceptedMessage: {
-      type: Sequelize.TEXT,
-      allowNull: true
-    }
+    exceptedMessage: Sequelize.TEXT
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
   let EVMReceiptLog = sequelize.define('evm_receipt_log', {

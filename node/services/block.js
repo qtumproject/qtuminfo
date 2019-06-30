@@ -401,32 +401,17 @@ class BlockService extends Service {
     do {
       header = await this.#Header.findByHash(rawBlock.hash, {attributes: ['height']})
     } while (!header)
-    let minerId
-    if (header.height > 5000) {
-      minerId = (await this.#TransactionOutput.findOne({
-        where: {inputIndex: 0},
-        attributes: ['addressId'],
-        include: [{
-          model: this.#Transaction,
-          as: 'inputTransaction',
-          required: true,
-          where: {blockHeight: header.height, indexInBlock: 1},
-          attributes: []
-        }]
-      })).addressId
-    } else {
-      minerId = (await this.#TransactionOutput.findOne({
-        where: {outputIndex: 0},
-        attributes: ['addressId'],
-        include: [{
-          model: this.#Transaction,
-          as: 'outputTransaction',
-          required: true,
-          where: {blockHeight: header.height, indexInBlock: 0},
-          attributes: []
-        }]
-      })).addressId
-    }
+    let minerId = (await this.#TransactionOutput.findOne({
+      where: {outputIndex: header.height > 5000 ? 1 : 0},
+      attributes: ['addressId'],
+      include: [{
+        model: this.#Transaction,
+        as: 'transaction',
+        required: true,
+        where: {blockHeight: header.height, indexInBlock: header.height > 5000 ? 1 : 0},
+        attributes: []
+      }]
+    })).addressId
     return await this.#Block.create({
       hash: rawBlock.hash,
       height: header.height,
