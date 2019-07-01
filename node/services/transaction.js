@@ -2,6 +2,7 @@ const Sequelize = require('sequelize')
 const uuidv4 = require('uuid/v4')
 const {Address, Opcode, OutputScript} = require('../../lib')
 const Service = require('./base')
+const {sql} = require('../utils')
 
 const {gt: $gt, in: $in} = Sequelize.Op
 
@@ -45,13 +46,13 @@ class TransactionService extends Service {
     }
     await this.#TransactionOutputMapping.destroy({truncate: true})
     await this.#TransactionOutput.destroy({where: {blockHeight: {[$gt]: this.#tip.height}}})
-    await this.#db.query(`
+    await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
       SET output.input_id = 0, output.input_index = 0xffffffff
       WHERE output.transaction_id = input.output_id AND input.block_height > ${this.#tip.height}
     `)
     await this.#TransactionInput.destroy({where: {blockHeight: {[$gt]: this.#tip.height}}})
-    await this.#db.query(`
+    await this.#db.query(sql`
       DELETE tx, witness, receipt, log, refund, contract_spend, balance
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
@@ -67,13 +68,13 @@ class TransactionService extends Service {
   }
 
   async onReorg(height) {
-    await this.#db.query(`
+    await this.#db.query(sql`
       UPDATE transaction tx, transaction_output output, transaction_input input
       SET output.input_id = 0, output.input_index = 0xffffffff
       WHERE input.transaction_id = tx._id AND tx.block_height > ${Math.max(height, 5000)} AND tx.index_in_block = 1
         AND output.transaction_id = input.output_id
     `)
-    await this.#db.query(`
+    await this.#db.query(sql`
       DELETE receipt, log, refund, contract_spend
       FROM transaction tx
       LEFT JOIN evm_receipt receipt ON receipt.transaction_id = tx._id
@@ -82,7 +83,7 @@ class TransactionService extends Service {
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
       WHERE tx.block_height > ${height}
     `)
-    await this.#db.query(`
+    await this.#db.query(sql`
       DELETE tx, witness, output, input, balance
       FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
@@ -97,12 +98,12 @@ class TransactionService extends Service {
       {where: {blockHeight: {[$gt]: height}}}
     )
     await this.#TransactionOutput.update({blockHeight: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
-    await this.#db.query(`
+    await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
       SET output.input_height = 0xffffffff, input.block_height = 0xffffffff
       WHERE input.block_height > ${height} and output.transaction_id = input.output_id
     `)
-    await this.#db.query(`
+    await this.#db.query(sql`
       UPDATE balance_change balance, transaction tx
       SET balance.block_height = 0xffffffff, balance.index_in_block = 0xffffffff
       WHERE balance.transaction_id = tx._id AND tx.block_height > ${height}
@@ -160,15 +161,15 @@ class TransactionService extends Service {
             {where: {transactionId: {[$in]: _ids}}}
           )
         ])
-        await this.#db.query(`
+        await this.#db.query(sql`
           UPDATE transaction_output output, transaction_input input
           SET output.input_height = ${block.height}
-          WHERE input.transaction_id IN (${_ids.join(', ')}) AND output.transaction_id = input.output_id
+          WHERE input.transaction_id IN ${_ids} AND output.transaction_id = input.output_id
         `)
-        await this.#db.query(`
+        await this.#db.query(sql`
           UPDATE address, transaction_output output
           SET address.create_height = LEAST(address.create_height, ${block.height})
-          WHERE address._id = output.address_id AND output.transaction_id IN (${_ids.join(', ')})
+          WHERE address._id = output.address_id AND output.transaction_id IN ${_ids}
         `)
       }
 
@@ -253,12 +254,12 @@ class TransactionService extends Service {
     }
     let addressItems = []
     for (let {type, data} of addressMap.values()) {
-      addressItems.push(`(${this.#Address.parseType(type)}, X'${data.toString('hex')}')`)
+      addressItems.push([this.#Address.parseType(type), data])
     }
     if (addressItems.length) {
-      for (let {_id, type, data} of await this.#db.query(`
+      for (let {_id, type, data} of await this.#db.query(sql`
         SELECT _id, type, data FROM address
-        WHERE (type, data) IN (${addressItems.join(', ')})
+        WHERE (type, data) IN ${addressItems}
       `, {type: this.#db.QueryTypes.SELECT})) {
         let key = `${data.toString('hex')}/${this.#Address.getType(type)}`
         let item = addressMap.get(key)
@@ -310,12 +311,7 @@ class TransactionService extends Service {
       for (let inputIndex = 0; inputIndex < tx.inputs.length; ++inputIndex) {
         let input = tx.inputs[inputIndex]
         if (Buffer.compare(tx.inputs[0].prevTxId, Buffer.alloc(32)) !== 0 || tx.inputs[0].outputIndex !== 0xffffffff) {
-          mappings.push({
-            inputTxId: tx.id,
-            inputIndex,
-            outputTxId: input.prevTxId,
-            outputIndex: input.outputIndex
-          })
+          mappings.push(sql`${[mappingId, tx.id, inputIndex, input.prevTxId, input.outputIndex]}`)
         }
         inputTxos.push({
           transactionId: transactionIds[index],
@@ -335,26 +331,20 @@ class TransactionService extends Service {
       this.#TransactionOutput.bulkCreate(outputTxos, {validate: false}),
       this.#TransactionInput.bulkCreate(inputTxos, {validate: false}),
       ...mappings.length ? [
-        this.#db.query(`
-          INSERT INTO transaction_output_mapping (
-            _id, input_transaction_id, input_index, output_transaction_id, output_index
-          ) VALUES
-          ${mappings.map(item => `(
-            '${mappingId}',
-            X'${item.inputTxId.toString('hex')}', ${item.inputIndex},
-            X'${item.outputTxId.toString('hex')}', ${item.outputIndex}
-          )`)}
+        this.#db.query(sql`
+          INSERT INTO transaction_output_mapping (_id, input_transaction_id, input_index, output_transaction_id, output_index)
+          VALUES ${{raw: mappings.join(', ')}}
         `)
       ] : []
     ])
-    await this.#db.query(`
+    await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input, transaction_output_mapping mapping, transaction tx1, transaction tx2
       SET input.value = output.value, input.address_id = output.address_id,
         input.output_id = output.transaction_id, input.output_index = output.output_index,
         output.input_id = input.transaction_id, output.input_index = input.input_index, output.input_height = input.block_height
       WHERE tx1.id = mapping.input_transaction_id AND input.transaction_id = tx1._id AND input.input_index = mapping.input_index
         AND tx2.id = mapping.output_transaction_id AND output.transaction_id = tx2._id AND output.output_index = mapping.output_index
-        AND mapping._id = '${mappingId}'
+        AND mapping._id = ${mappingId}
     `)
     let t = await this.#db.transaction({isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.READ_UNCOMMITTED})
     try {
@@ -373,7 +363,7 @@ class TransactionService extends Service {
         return
       }
       if (block) {
-        await this.#db.query(`
+        await this.#db.query(sql`
           UPDATE balance_change balance, transaction tx
           SET balance.block_height = ${block.height}, balance.index_in_block = tx.index_in_block
           WHERE tx._id = balance.transaction_id AND tx.block_height = ${block.height}
@@ -389,14 +379,14 @@ class TransactionService extends Service {
           attributes: ['_id']
         })
       ])
-      filter = `transaction_id BETWEEN ${min} and ${max}`
+      filter = sql`transaction_id BETWEEN ${min} and ${max}`
     } else {
-      filter = `block_height = ${block.height}`
+      filter = sql`block_height = ${block.height}`
     }
 
     let t = await this.#db.transaction({isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.READ_UNCOMMITTED})
     try {
-      await this.#db.query(`
+      await this.#db.query(sql`
         INSERT INTO balance_change (transaction_id, block_height, index_in_block, address_id, value)
         SELECT
           tx._id AS transactionId,
@@ -407,9 +397,9 @@ class TransactionService extends Service {
         FROM (
           SELECT transaction_id, address_id, SUM(value) AS value
           FROM (
-            SELECT transaction_id, address_id, value FROM transaction_output WHERE ${filter}
+            SELECT transaction_id, address_id, value FROM transaction_output WHERE ${{raw: filter}}
             UNION ALL
-            SELECT transaction_id, address_id, -value AS value FROM transaction_input WHERE ${filter}
+            SELECT transaction_id, address_id, -value AS value FROM transaction_input WHERE ${{raw: filter}}
           ) AS block_balance
           GROUP BY transaction_id, address_id
         ) AS list
@@ -611,11 +601,11 @@ class TransactionService extends Service {
       if (!item) {
         return false
       }
-      inputTxos.push(`(${item._id}, ${input.outputIndex})`)
+      inputTxos.push([item._id, input.outputIndex])
     }
-    let transactionsToRemove = (await this.#db.query(`
+    let transactionsToRemove = (await this.#db.query(sql`
       SELECT DISTINCT(input_id) AS id FROM transaction_output
-      WHERE (transaction_id, output_index) IN (${inputTxos.join(', ')}) AND input_id > 0
+      WHERE (transaction_id, output_index) IN ${inputTxos} AND input_id > 0
     `, {type: this.#db.QueryTypes.SELECT})).map(tx => tx.id)
     for (let id of transactionsToRemove) {
       await this._removeMempoolTransaction(id)
@@ -630,7 +620,7 @@ class TransactionService extends Service {
     for (let subId of transactionsToRemove) {
       await this._removeMempoolTransaction(subId)
     }
-    await this.#db.query(`
+    await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
       SET output.input_id = 0, output.input_index = 0
       WHERE input.transaction_id = ${id} AND output.transaction_id = input.output_id
@@ -640,7 +630,7 @@ class TransactionService extends Service {
       this.#TransactionInput.destroy({where: {transactionId: id}}),
       this.#BalanceChange.destroy({where: {transactionId: id}})
     ])
-    await this.#db.query(`
+    await this.#db.query(sql`
       DELETE tx, witness FROM transaction tx
       LEFT JOIN witness ON witness.transaction_id = tx.id
       WHERE tx._id = ${id}

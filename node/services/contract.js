@@ -1,6 +1,7 @@
 const Sequelize = require('sequelize')
 const {Address, OutputScript, Solidity, Hash} = require('../../lib')
 const Service = require('./base')
+const {sql} = require('../utils')
 
 const {ne: $ne, gt: $gt, in: $in} = Sequelize.Op
 
@@ -161,17 +162,16 @@ class ContractService extends Service {
     if (balanceChanges.size) {
       await this._updateBalances(balanceChanges)
     }
-    await this.#db.query(`
+    await this.#db.query(sql`
       INSERT INTO qrc721_token
       SELECT log.address AS contract_address, log.topic4 AS token_id, RIGHT(log.topic2, 20) AS holder
       FROM evm_receipt receipt, evm_receipt_log log
       INNER JOIN (
         SELECT address, topic4, MIN(_id) AS _id FROM evm_receipt_log
-        WHERE topic4 IS NOT NULL AND topic1 = 0x${TransferABI.id.toString('hex')}
+        WHERE topic4 IS NOT NULL AND topic1 = ${TransferABI.id}
         GROUP BY address, topic4
       ) results ON log._id = results._id
-      WHERE receipt._id = log.receipt_id AND receipt.block_height > ${height}
-        AND log.topic2 != 0x${'0'.repeat(64)}
+      WHERE receipt._id = log.receipt_id AND receipt.block_height > ${height} AND log.topic2 != ${Buffer.alloc(32)}
       ON DUPLICATE KEY UPDATE holder = VALUES(holder)
     `)
   }
@@ -196,8 +196,7 @@ class ContractService extends Service {
       }
     }
     if (contractsToRemove.length) {
-      let addresses = contractsToRemove.map(address => `0x${address}`).join(', ')
-      await this.#db.query(`
+      await this.#db.query(sql`
         DELETE contract, tag, qrc20, qrc20_balance, qrc721, qrc721_token
         FROM contract
         LEFT JOIN contract_tag tag ON tag.contract_address = contract.address
@@ -205,7 +204,7 @@ class ContractService extends Service {
         LEFT JOIN qrc20_balance ON qrc20_balance.contract_address = contract.address
         LEFT JOIN qrc721 ON qrc721.contract_address = contract.address
         LEFT JOIN qrc721_token ON qrc721_token.contract_address = contract.address
-        WHERE contract.address IN (${addresses})
+        WHERE contract.address IN ${contractsToRemove}
       `)
     }
     for (let address of contractsToCreate) {

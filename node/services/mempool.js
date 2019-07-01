@@ -1,6 +1,6 @@
 const Sequelize = require('sequelize')
 const Service = require('./base')
-const {AsyncQueue} = require('../utils')
+const {AsyncQueue, sql} = require('../utils')
 
 const {in: $in} = Sequelize.Op
 
@@ -112,10 +112,10 @@ class MempoolService extends Service {
       if (!item) {
         return false
       }
-      txos.push(`(${item._id}, ${input.outputIndex})`)
+      txos.push([item._id, input.outputIndex])
     }
     let [{count}] = await this.#db.query(
-      `SELECT COUNT(*) AS count FROM transaction_output WHERE (transaction_id, output_index) IN (${txos.join(', ')})`,
+      sql`SELECT COUNT(*) AS count FROM transaction_output WHERE (transaction_id, output_index) IN ${txos}`,
       {type: this.#db.QueryTypes.SELECT}
     )
     return Number(count) === tx.inputs.length
