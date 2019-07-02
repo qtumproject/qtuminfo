@@ -78,7 +78,7 @@ class TransactionService extends Service {
         AND output.transaction_id = input.output_id
     `)
     await this.#db.query(sql`
-      DELETE receipt, log, refund, contract_spend
+      DELETE log, refund, contract_spend
       FROM transaction tx
       LEFT JOIN evm_receipt receipt ON receipt.transaction_id = tx._id
       LEFT JOIN evm_receipt_log log ON log.receipt_id = receipt._id
@@ -101,6 +101,7 @@ class TransactionService extends Service {
       {where: {blockHeight: {[$gt]: height}}}
     )
     await this.#TransactionOutput.update({blockHeight: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
+    await this.#EVMReceiptLog.update({blockHeight: 0xffffffff, indexInBlock: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
     await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
       SET output.input_height = 0xffffffff, input.block_height = 0xffffffff
