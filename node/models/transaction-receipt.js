@@ -75,6 +75,22 @@ function generate(sequelize) {
     data: Sequelize.BLOB
   }, {freezeTableName: true, underscored: true, timestamps: false})
 
+  sequelize.define('evm_receipt_mapping', {
+    transactionId: {
+      type: Sequelize.BIGINT.UNSIGNED,
+      primaryKey: true
+    },
+    outputIndex: {
+      type: Sequelize.INTEGER.UNSIGNED,
+      primaryKey: true
+    },
+    indexInBlock: Sequelize.INTEGER.UNSIGNED,
+    gasUsed: Sequelize.INTEGER.UNSIGNED,
+    contractAddress: Sequelize.CHAR(20).BINARY,
+    excepted: Sequelize.STRING(32),
+    exceptedMessage: Sequelize.TEXT
+  }, {freezeTableName: true, underscored: true, timestamps: false})
+
   sequelize.models.transaction.hasMany(EVMReceipt, {as: 'evmReceipts', foreignKey: 'transactionId'})
   EVMReceipt.belongsTo(sequelize.models.transaction, {as: 'transaction', foreignKey: 'transactionId'})
   EVMReceipt.hasMany(EVMReceiptLog, {as: 'logs', foreignKey: 'receiptId'})

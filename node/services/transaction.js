@@ -21,6 +21,7 @@ class TransactionService extends Service {
   #ContractSpend = null
   #EVMReceipt = null
   #EVMReceiptLog = null
+  #EVMReceiptMapping = null
 
   static get dependencies() {
     return ['block', 'db']
@@ -39,12 +40,12 @@ class TransactionService extends Service {
     this.#ContractSpend = this.node.getModel('contract_spend')
     this.#EVMReceipt = this.node.getModel('evm_receipt')
     this.#EVMReceiptLog = this.node.getModel('evm_receipt_log')
+    this.#EVMReceiptMapping = this.node.getModel('evm_receipt_mapping')
     this.#tip = await this.node.getServiceTip(this.name)
     let blockTip = this.node.getBlockTip()
     if (this.#tip.height > blockTip.height) {
       this.#tip = {height: blockTip.height, hash: blockTip.hash}
     }
-    await this.#TransactionOutputMapping.destroy({truncate: true})
     await this.#TransactionOutput.destroy({where: {blockHeight: {[$gt]: this.#tip.height}}})
     await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
@@ -64,6 +65,8 @@ class TransactionService extends Service {
       WHERE tx.block_height > ${this.#tip.height}
     `)
     await this.#Address.destroy({where: {createHeight: {[$gt]: this.#tip.height}}})
+    await this.#TransactionOutputMapping.destroy({truncate: true})
+    await this.#EVMReceiptMapping.destroy({truncate: true})
     await this.node.updateServiceTip(this.name, this.#tip)
   }
 
@@ -123,6 +126,7 @@ class TransactionService extends Service {
       } else {
         await this.processBalanceChanges({block})
       }
+      await this.processReceipts(newTransactions)
       await this._processContracts(block)
       this.#tip.height = block.height
       this.#tip.hash = block.hash
@@ -223,6 +227,14 @@ class TransactionService extends Service {
       await this.#Transaction.bulkCreate(txs, {validate: false})
     }
     await this.#Witness.bulkCreate(witnesses, {validate: false})
+    let ids = (await this.#Transaction.findAll({
+      where: {id: {[$in]: newTransactions.map(tx => tx.id)}},
+      attributes: ['_id'],
+      order: [['_id', 'ASC']]
+    })).map(tx => tx._id)
+    for (let i = 0; i < newTransactions.length; ++i) {
+      newTransactions[i]._id = ids[i]
+    }
     return newTransactions
   }
 
@@ -282,12 +294,6 @@ class TransactionService extends Service {
       }
     }
 
-    let transactionIds = (await this.#Transaction.findAll({
-      where: {id: {[$in]: transactions.map(tx => tx.id)}},
-      attributes: ['_id'],
-      order: [['_id', 'ASC']]
-    })).map(tx => tx._id)
-
     let outputTxos = []
     let inputTxos = []
     let mappings = []
@@ -297,7 +303,7 @@ class TransactionService extends Service {
       for (let outputIndex = 0; outputIndex < tx.outputs.length; ++outputIndex) {
         let output = tx.outputs[outputIndex]
         outputTxos.push({
-          transactionId: transactionIds[index],
+          transactionId: tx._id,
           outputIndex,
           scriptPubKey: output.scriptPubKey.toBuffer(),
           blockHeight: tx.blockHeight,
@@ -314,7 +320,7 @@ class TransactionService extends Service {
           mappings.push(sql`${[mappingId, tx.id, inputIndex, input.prevTxId, input.outputIndex]}`)
         }
         inputTxos.push({
-          transactionId: transactionIds[index],
+          transactionId: tx._id,
           inputIndex,
           scriptSig: input.scriptSig,
           sequence: input.sequence,
@@ -369,17 +375,7 @@ class TransactionService extends Service {
           WHERE tx._id = balance.transaction_id AND tx.block_height = ${block.height}
         `)
       }
-      let [{_id: min}, {_id: max}] = await Promise.all([
-        this.#Transaction.findOne({
-          where: {id: transactions[0].id},
-          attributes: ['_id']
-        }),
-        this.#Transaction.findOne({
-          where: {id: transactions[transactions.length - 1].id},
-          attributes: ['_id']
-        })
-      ])
-      filter = sql`transaction_id BETWEEN ${min} and ${max}`
+      filter = sql`transaction_id BETWEEN ${transactions[0]._id} and ${transactions[transactions.length - 1]._id}`
     } else {
       filter = sql`block_height = ${block.height}`
     }
@@ -409,6 +405,60 @@ class TransactionService extends Service {
     } catch (err) {
       await t.rollback()
       throw err
+    }
+  }
+
+  async processReceipts(transactions) {
+    let receipts = []
+    for (let tx of transactions) {
+      for (let outputIndex = 0; outputIndex < tx.outputs.length; ++outputIndex) {
+        let output = tx.outputs[outputIndex]
+        if ([
+          OutputScript.EVM_CONTRACT_CREATE,
+          OutputScript.EVM_CONTRACT_CREATE_SENDER,
+          OutputScript.EVM_CONTRACT_CALL,
+          OutputScript.EVM_CONTRACT_CALL_SENDER
+        ].includes(output.scriptPubKey.type)) {
+          let senderType
+          let senderData
+          let hasOpSender = [
+            OutputScript.EVM_CONTRACT_CREATE_SENDER,
+            OutputScript.EVM_CONTRACT_CALL_SENDER
+          ].includes(output.scriptPubKey.type)
+          if (hasOpSender) {
+            senderType = this.#Address.getType(output.scriptPubKey.addressType)
+            senderData = output.scriptPubKey.addressData
+          } else {
+            let {address: refunder} = await this.#TransactionInput.findOne({
+              where: {transactionId: tx._id, inputIndex: 0},
+              attributes: [],
+              include: [{
+                model: this.#Address,
+                as: 'address',
+                required: true,
+                attributes: ['type', 'data']
+              }]
+            })
+            senderType = refunder.type
+            senderData = refunder.data
+          }
+          receipts.push({
+            transactionId: tx._id,
+            outputIndex,
+            blockHeight: tx.blockHeight,
+            indexInBlock: tx.indexInBlock,
+            senderType,
+            senderData,
+            gasUsed: 0,
+            contractAddress: Buffer.alloc(20),
+            excepted: '',
+            exceptedMessage: ''
+          })
+        }
+      }
+    }
+    if (receipts.length) {
+      await this.#EVMReceipt.bulkCreate(receipts, {validate: false})
     }
   }
 
@@ -514,27 +564,7 @@ class TransactionService extends Service {
       }
       for (let i = 0; i < indices.length; ++i) {
         let output = tx.outputs[indices[i]]
-        let sender
         let refunder = refunderMap.get(tx.id.toString('hex'))
-        let hasOpSender = [
-          OutputScript.EVM_CONTRACT_CREATE_SENDER,
-          OutputScript.EVM_CONTRACT_CALL_SENDER
-        ].includes(output.scriptPubKey.type)
-        if (hasOpSender) {
-          sender = new Address({
-            type: [
-              null,
-              Address.PAY_TO_PUBLIC_KEY_HASH,
-              Address.PAY_TO_SCRIPT_HASH,
-              Address.PAY_TO_WITNESS_SCRIPT_HASH,
-              Address.PAY_TO_WITNESS_KEY_HASH
-            ][output.scriptPubKey.addressType],
-            data: output.scriptPubKey.addressData,
-            chain: this.chain
-          })
-        } else {
-          sender = new Address({type: refunder.type, data: refunder.data, chain: this.chain})
-        }
         let {gasUsed, contractAddress, excepted, exceptedMessage, log: logs} = blockReceipts[index][i]
         if (gasUsed) {
           let {gasLimit, gasPrice} = output.scriptPubKey
@@ -558,10 +588,7 @@ class TransactionService extends Service {
         receipts.push({
           transactionId: transactionIds[indexInBlock],
           outputIndex: indices[i],
-          blockHeight: block.height,
           indexInBlock,
-          senderType: sender.type,
-          senderData: sender.data,
           gasUsed,
           contractAddress: Buffer.from(contractAddress, 'hex'),
           excepted,
@@ -582,10 +609,25 @@ class TransactionService extends Service {
         }
       }
     }
-    await this.#GasRefund.bulkCreate(gasRefunds, {validate: false})
-    let newReceipts = await this.#EVMReceipt.bulkCreate(receipts, {validate: false})
+    await Promise.all([
+      this.#GasRefund.bulkCreate(gasRefunds, {validate: false}),
+      this.#EVMReceiptMapping.bulkCreate(receipts, {validate: false})
+    ])
+    await this.#db.query(sql`
+      UPDATE evm_receipt receipt, evm_receipt_mapping mapping
+      SET receipt.block_height = ${block.height}, receipt.index_in_block = mapping.index_in_block,
+        receipt.gas_used = mapping.gas_used, receipt.contract_address = mapping.contract_address,
+        receipt.excepted = mapping.excepted, receipt.excepted_message = mapping.excepted_message
+      WHERE receipt.transaction_id = mapping.transaction_id AND receipt.output_index = mapping.output_index
+    `)
+    await this.#EVMReceiptMapping.destroy({truncate: true})
+    let receiptIds = (await this.#EVMReceipt.findAll({
+      where: {blockHeight: block.height},
+      attributes: ['_id'],
+      order: [['indexInBlock', 'ASC'], ['transactionId', 'ASC'], ['outputIndex', 'ASC']]
+    })).map(receipt => receipt._id)
     for (let log of receiptLogs) {
-      log.receiptId = newReceipts[log.receiptId]._id
+      log.receiptId = receiptIds[log.receiptId]
     }
     await this.#EVMReceiptLog.bulkCreate(receiptLogs, {validate: false})
   }

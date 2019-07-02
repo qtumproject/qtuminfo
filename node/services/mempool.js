@@ -70,12 +70,13 @@ class MempoolService extends Service {
 
   async _onTransaction(tx) {
     tx.blockHeight = 0xffffffff
+    tx.indexInBlock = 0xffffffff
     try {
       if (!await this._validate(tx)) {
         return
       }
       await this.#transaction.removeReplacedTransactions(tx)
-      await this.#Transaction.create({
+      tx._id = (await this.#Transaction.create({
         id: tx.id,
         hash: tx.hash,
         version: tx.version,
@@ -85,13 +86,14 @@ class MempoolService extends Service {
         indexInBlock: 0xffffffff,
         size: tx.size,
         weight: tx.weight
-      })
+      }))._id
       let witnesses = this.#transaction.groupWitnesses(tx)
       await Promise.all([
         this.#Witness.bulkCreate(witnesses, {validate: false}),
         this.#transaction.processTxos([tx]),
       ])
       await this.#transaction.processBalanceChanges({transactions: [tx]})
+      await this.#transaction.processReceipts([tx])
 
       for (let subscription of this.subscriptions.transaction) {
         subscription.emit('mempool/transaction', tx)
