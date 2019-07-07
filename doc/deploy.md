@@ -7,7 +7,7 @@ qtuminfo is splitted into 3 repos:
 
 ## Prerequisites
 
-* node.js v10.5+
+* node.js v12.0+
 * mysql v8.0+
 * redis v5.0+
 
