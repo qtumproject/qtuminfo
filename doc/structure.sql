@@ -165,6 +165,15 @@ CREATE TABLE `qrc20_balance` (
   KEY `address` (`address`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `qrc20_statistics` (
+  `contract_address` binary(20) NOT NULL,
+  `holders` int(10) unsigned NOT NULL,
+  `transactions` int(10) unsigned NOT NULL,
+  PRIMARY KEY (`contract_address`),
+  KEY `holders` (`holders` DESC) USING BTREE,
+  KEY `transactions` (`transactions` DESC) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `qrc721` (
   `contract_address` binary(20) NOT NULL,
   `name` blob NOT NULL,
