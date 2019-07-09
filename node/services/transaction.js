@@ -80,16 +80,16 @@ class TransactionService extends Service {
     await this.#db.query(sql`
       DELETE refund, contract_spend
       FROM transaction tx
-      LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
-      LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
+      LEFT JOIN gas_refund refund ON refund.transaction_id = tx._id
+      LEFT JOIN contract_spend ON contract_spend.source_id = tx._id
       WHERE tx.block_height > ${height}
     `)
     await this.#db.query(sql`
       DELETE tx, witness, output, input, balance
       FROM transaction tx
-      LEFT JOIN witness ON witness.transaction_id = tx.id
-      LEFT JOIN transaction_output output ON output.transaction_id = tx.id
-      LEFT JOIN transaction_input input ON input.transaction_id = tx.id
+      LEFT JOIN witness ON witness.transaction_id = tx._id
+      LEFT JOIN transaction_output output ON output.transaction_id = tx._id
+      LEFT JOIN transaction_input input ON input.transaction_id = tx._id
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.block_height > ${height} AND tx.index_in_block < 2
         AND (tx.index_in_block = 0 OR tx.block_height > 5000)
