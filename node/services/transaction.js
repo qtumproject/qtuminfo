@@ -78,10 +78,8 @@ class TransactionService extends Service {
         AND output.transaction_id = input.output_id
     `)
     await this.#db.query(sql`
-      DELETE log, refund, contract_spend
+      DELETE refund, contract_spend
       FROM transaction tx
-      LEFT JOIN evm_receipt receipt ON receipt.transaction_id = tx._id
-      LEFT JOIN evm_receipt_log log ON log.receipt_id = receipt._id
       LEFT JOIN gas_refund refund ON refund.transaction_id = tx.id
       LEFT JOIN contract_spend ON contract_spend.source_id = tx.id
       WHERE tx.block_height > ${height}
@@ -101,7 +99,8 @@ class TransactionService extends Service {
       {where: {blockHeight: {[$gt]: height}}}
     )
     await this.#TransactionOutput.update({blockHeight: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
-    await this.#EVMReceiptLog.update({blockHeight: 0xffffffff, indexInBlock: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
+    await this.#EVMReceipt.update({blockHeight: 0xffffffff, indexInBlock: 0xffffffff}, {where: {blockHeight: {[$gt]: height}}})
+    await this.#EVMReceiptLog.destroy({where: {blockHeight: {[$gt]: height}}})
     await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
       SET output.input_height = 0xffffffff, input.block_height = 0xffffffff
@@ -600,6 +599,7 @@ class TransactionService extends Service {
           receiptLogs.push({
             receiptId: receiptIndex,
             logIndex: j,
+            blockHeight: block.height,
             address: Buffer.from(address, 'hex'),
             topic1: topics[0] && Buffer.from(topics[0], 'hex'),
             topic2: topics[1] && Buffer.from(topics[1], 'hex'),

@@ -67,6 +67,7 @@ function generate(sequelize) {
     },
     receiptId: Sequelize.BIGINT.UNSIGNED,
     logIndex: Sequelize.INTEGER.UNSIGNED,
+    blockHeight: Sequelize.INTEGER.UNSIGNED,
     address: Sequelize.CHAR(20).BINARY,
     topic1: Sequelize.STRING(32).BINARY,
     topic2: Sequelize.STRING(32).BINARY,
