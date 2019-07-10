@@ -50,7 +50,7 @@ class TransactionService extends Service {
     await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
       SET output.input_id = 0, output.input_index = 0xffffffff
-      WHERE output.transaction_id = input.output_id AND input.block_height > ${this.#tip.height}
+      WHERE output.transaction_id = input.output_id AND output.output_index = input.output_index AND input.block_height > ${this.#tip.height}
     `)
     await this.#TransactionInput.destroy({where: {blockHeight: {[$gt]: this.#tip.height}}})
     await this.#db.query(sql`
@@ -75,7 +75,7 @@ class TransactionService extends Service {
       UPDATE transaction tx, transaction_output output, transaction_input input
       SET output.input_id = 0, output.input_index = 0xffffffff
       WHERE input.transaction_id = tx._id AND tx.block_height > ${Math.max(height, 5000)} AND tx.index_in_block = 1
-        AND output.transaction_id = input.output_id
+        AND output.transaction_id = input.output_id AND output.output_index = input.output_index
     `)
     await this.#db.query(sql`
       DELETE refund, contract_spend
@@ -87,7 +87,7 @@ class TransactionService extends Service {
     await this.#db.query(sql`
       DELETE tx, witness, output, input, balance
       FROM transaction tx
-      LEFT JOIN witness ON witness.transaction_id = tx._id
+      LEFT JOIN witness ON witness.transaction_id = tx.id
       LEFT JOIN transaction_output output ON output.transaction_id = tx._id
       LEFT JOIN transaction_input input ON input.transaction_id = tx._id
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
@@ -104,7 +104,7 @@ class TransactionService extends Service {
     await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
       SET output.input_height = 0xffffffff, input.block_height = 0xffffffff
-      WHERE input.block_height > ${height} and output.transaction_id = input.output_id
+      WHERE input.block_height > ${height} AND output.transaction_id = input.output_id AND output.output_index = input.output_index
     `)
     await this.#db.query(sql`
       UPDATE balance_change balance, transaction tx
@@ -665,8 +665,8 @@ class TransactionService extends Service {
     }
     await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
-      SET output.input_id = 0, output.input_index = 0
-      WHERE input.transaction_id = ${id} AND output.transaction_id = input.output_id
+      SET output.input_id = 0, output.input_index = 0xffffffff
+      WHERE input.transaction_id = ${id} AND output.transaction_id = input.output_id AND output.output_index = input.output_index
     `)
     await Promise.all([
       this.#TransactionOutput.destroy({where: {transactionId: id}}),
