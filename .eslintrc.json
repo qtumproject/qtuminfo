@@ -57,6 +57,7 @@
     "no-new-require": "error",
     "no-path-concat": "warn",
     "array-bracket-newline": ["warn", "consistent"],
+    "array-bracket-spacing": "warn",
     "brace-style": ["warn", "1tbs", {"allowSingleLine": true}],
     "camelcase": "warn",
     "comma-spacing": "warn",
