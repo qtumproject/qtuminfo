@@ -17,6 +17,7 @@
     "no-console": "off",
     "no-empty": ["warn", {"allowEmptyCatch": true}],
     "no-extra-parens": "warn",
+    "require-atomic-updates": "off",
     "curly": ["error", "multi-line"],
     "dot-notation": "warn",
     "eqeqeq": ["error", "smart"],
