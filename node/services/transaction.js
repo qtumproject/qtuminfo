@@ -74,7 +74,7 @@ class TransactionService extends Service {
     await this.#db.query(sql`
       UPDATE transaction tx, transaction_output output, transaction_input input
       SET output.input_id = 0, output.input_index = 0xffffffff
-      WHERE input.transaction_id = tx._id AND tx.block_height > ${Math.max(height, 5000)} AND tx.index_in_block = 1
+      WHERE input.transaction_id = tx._id AND tx.block_height > ${Math.max(height, this.chain.lastPoWBlockHeight)} AND tx.index_in_block = 1
         AND output.transaction_id = input.output_id AND output.output_index = input.output_index
     `)
     await this.#db.query(sql`
@@ -92,7 +92,7 @@ class TransactionService extends Service {
       LEFT JOIN transaction_input input ON input.transaction_id = tx._id
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.block_height > ${height} AND tx.index_in_block < 2
-        AND (tx.index_in_block = 0 OR tx.block_height > 5000)
+        AND (tx.index_in_block = 0 OR tx.block_height > ${this.lastPowBlockHeight})
     `)
     await this.#Transaction.update(
       {blockHeight: 0xffffffff, indexInBlock: 0xffffffff},
@@ -147,7 +147,7 @@ class TransactionService extends Service {
     let witnesses = []
     if (this.#synced) {
       let mempoolTransactions = await this.#Transaction.findAll({
-        where: {id: {[$in]: block.transactions.slice(block.height > 5000 ? 2 : 1).map(tx => tx.id)}},
+        where: {id: {[$in]: block.transactions.slice(block.height > this.lastPowBlockHeight ? 2 : 1).map(tx => tx.id)}},
         attributes: ['_id', 'id']
       })
       let mempoolTransactionsSet = new Set()
@@ -309,7 +309,7 @@ class TransactionService extends Service {
           blockHeight: tx.blockHeight,
           value: output.value,
           addressId: addressIds[index][outputIndex],
-          isStake: tx.indexInBlock === 0 || tx.blockHeight > 5000 && tx.indexInBlock === 1,
+          isStake: tx.indexInBlock === 0 || tx.blockHeight > this.lastPowBlockHeight && tx.indexInBlock === 1,
           inputId: 0,
           inputIndex: 0xffffffff
         })
@@ -493,7 +493,7 @@ class TransactionService extends Service {
     if (contractSpends.length) {
       await this.#ContractSpend.bulkCreate(contractSpends, {validate: false})
     }
-    block.transactionsCount = block.transactions.length - (block.height > 5000 ? 2 : 1) - contractSpends.length
+    block.transactionsCount = block.transactions.length - (block.height > this.chain.lastPoWBlockHeight ? 2 : 1) - contractSpends.length
     block.contractTransactionsCount = receiptIndices.length
     if (receiptIndices.length === 0) {
       return

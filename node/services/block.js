@@ -402,13 +402,13 @@ class BlockService extends Service {
       header = await this.#Header.findByHash(rawBlock.hash, {attributes: ['height']})
     } while (!header)
     let minerId = (await this.#TransactionOutput.findOne({
-      where: {outputIndex: header.height > 5000 ? 1 : 0},
+      where: {outputIndex: header.height > this.chain.lastPoWBlockHeight ? 1 : 0},
       attributes: ['addressId'],
       include: [{
         model: this.#Transaction,
         as: 'transaction',
         required: true,
-        where: {blockHeight: header.height, indexInBlock: header.height > 5000 ? 1 : 0},
+        where: {blockHeight: header.height, indexInBlock: header.height > this.chain.lastPoWBlockHeight ? 1 : 0},
         attributes: []
       }]
     })).addressId
