@@ -118,8 +118,8 @@ class ContractService extends Service {
               Address.PAY_TO_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_SCRIPT_HASH,
               Address.PAY_TO_WITNESS_KEY_HASH
-            ][output.scriptPubKey.addressType],
-            data: output.scriptPubKey.addressData,
+            ][output.scriptPubKey.senderType],
+            data: output.scriptPubKey.senderData,
             chain: this.chain
           })
           let contract = await this._createContract(address, 'evm')

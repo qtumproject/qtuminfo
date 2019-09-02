@@ -426,8 +426,8 @@ class TransactionService extends Service {
             OutputScript.EVM_CONTRACT_CALL_SENDER
           ].includes(output.scriptPubKey.type)
           if (hasOpSender) {
-            senderType = this.#Address.getType(output.scriptPubKey.addressType)
-            senderData = output.scriptPubKey.addressData
+            senderType = this.#Address.getType(output.scriptPubKey.senderType)
+            senderData = output.scriptPubKey.senderData
           } else {
             let {address: refunder} = await this.#TransactionInput.findOne({
               where: {transactionId: tx._id, inputIndex: 0},
