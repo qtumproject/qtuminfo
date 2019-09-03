@@ -92,7 +92,7 @@ class TransactionService extends Service {
       LEFT JOIN transaction_input input ON input.transaction_id = tx._id
       LEFT JOIN balance_change balance ON balance.transaction_id = tx._id
       WHERE tx.block_height > ${height} AND tx.index_in_block < 2
-        AND (tx.index_in_block = 0 OR tx.block_height > ${this.lastPowBlockHeight})
+        AND (tx.index_in_block = 0 OR tx.block_height > ${this.chain.lastPoWBlockHeight})
     `)
     await this.#Transaction.update(
       {blockHeight: 0xffffffff, indexInBlock: 0xffffffff},
@@ -147,7 +147,7 @@ class TransactionService extends Service {
     let witnesses = []
     if (this.#synced) {
       let mempoolTransactions = await this.#Transaction.findAll({
-        where: {id: {[$in]: block.transactions.slice(block.height > this.lastPowBlockHeight ? 2 : 1).map(tx => tx.id)}},
+        where: {id: {[$in]: block.transactions.slice(block.height > this.chain.lastPoWBlockHeight ? 2 : 1).map(tx => tx.id)}},
         attributes: ['_id', 'id']
       })
       let mempoolTransactionsSet = new Set()
@@ -309,7 +309,7 @@ class TransactionService extends Service {
           blockHeight: tx.blockHeight,
           value: output.value,
           addressId: addressIds[index][outputIndex],
-          isStake: tx.indexInBlock === 0 || tx.blockHeight > this.lastPowBlockHeight && tx.indexInBlock === 1,
+          isStake: tx.indexInBlock === 0 || tx.blockHeight > this.chain.lastPoWBlockHeight && tx.indexInBlock === 1,
           inputId: 0,
           inputIndex: 0xffffffff
         })
