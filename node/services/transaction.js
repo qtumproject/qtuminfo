@@ -49,7 +49,7 @@ class TransactionService extends Service {
     await this.#TransactionOutput.destroy({where: {blockHeight: {[$gt]: this.#tip.height}}})
     await this.#db.query(sql`
       UPDATE transaction_output output, transaction_input input
-      SET output.input_id = 0, output.input_index = 0xffffffff
+      SET output.input_id = 0, output.input_index = 0xffffffff, output.input_height = NULL
       WHERE output.transaction_id = input.output_id AND output.output_index = input.output_index AND input.block_height > ${this.#tip.height}
     `)
     await this.#TransactionInput.destroy({where: {blockHeight: {[$gt]: this.#tip.height}}})
@@ -73,7 +73,7 @@ class TransactionService extends Service {
   async onReorg(height) {
     await this.#db.query(sql`
       UPDATE transaction tx, transaction_output output, transaction_input input
-      SET output.input_id = 0, output.input_index = 0xffffffff
+      SET output.input_id = 0, output.input_index = 0xffffffff, output.input_height = NULL
       WHERE input.transaction_id = tx._id AND tx.block_height > ${Math.max(height, this.chain.lastPoWBlockHeight)} AND tx.index_in_block = 1
         AND output.transaction_id = input.output_id AND output.output_index = input.output_index
     `)
