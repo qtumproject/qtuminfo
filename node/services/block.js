@@ -399,16 +399,17 @@ class BlockService extends Service {
   async __onBlock(rawBlock) {
     let header
     do {
-      header = await this.#Header.findByHash(rawBlock.hash, {attributes: ['height']})
+      header = await this.#Header.findByHash(rawBlock.hash, {attributes: ['height', 'stakePrevTxId', 'stakeOutputIndex']})
     } while (!header)
+    let isProofOfStake = header.isProofOfStake()
     let minerId = (await this.#TransactionOutput.findOne({
-      where: {outputIndex: header.height > this.chain.lastPoWBlockHeight ? 1 : 0},
+      where: {outputIndex: isProofOfStake ? 1 : 0},
       attributes: ['addressId'],
       include: [{
         model: this.#Transaction,
         as: 'transaction',
         required: true,
-        where: {blockHeight: header.height, indexInBlock: header.height > this.chain.lastPoWBlockHeight ? 1 : 0},
+        where: {blockHeight: header.height, indexInBlock: isProofOfStake ? 1 : 0},
         attributes: []
       }]
     })).addressId
