@@ -19,7 +19,7 @@ class ServerService extends Service {
     this.#bus = this.node.openBus({remoteAddress: 'localhost-server'})
     this.#bus.on('block/block', this._onBlock.bind(this))
     this.#bus.subscribe('block/block')
-    this.#bus.on('block/reorg', this._onMempoolTransaction.bind(this))
+    this.#bus.on('block/reorg', this._onReorg.bind(this))
     this.#bus.subscribe('block/reorg')
     this.#bus.on('mempool/transaction', this._onMempoolTransaction.bind(this))
     this.#bus.subscribe('mempool/transaction')
