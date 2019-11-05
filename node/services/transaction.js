@@ -493,7 +493,7 @@ class TransactionService extends Service {
     if (contractSpends.length) {
       await this.#ContractSpend.bulkCreate(contractSpends, {validate: false})
     }
-    block.transactionsCount = block.transactions.length - (block.height > block.header.isProofOfStake() ? 2 : 1) - contractSpends.length
+    block.transactionsCount = block.transactions.length - (block.header.isProofOfStake() ? 2 : 1) - contractSpends.length
     block.contractTransactionsCount = receiptIndices.length
     if (receiptIndices.length === 0) {
       return
