@@ -13,6 +13,7 @@ qtuminfo is splitted into 3 repos:
 
 ## Deploy qtum core
 1. `git clone --recursive https://github.com/qtumproject/qtum.git --branch=qtuminfo`
+1. `git checkout a6de836fc59da179315a623728e1301e88fc46a8`
 2. Follow the instructions of [https://github.com/qtumproject/qtum/blob/master/README.md#building-qtum-core](https://github.com/qtumproject/qtum/blob/master/README.md#building-qtum-core) to build qtum
 3. Run `qtumd` with `-logevents=1` enabled
 
