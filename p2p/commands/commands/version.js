@@ -14,7 +14,7 @@ class VersionMessage extends Message {
     ...options
   }) {
     super('version', options)
-    this.version = options.protocolVersion || 70017
+    this.version = options.protocolVersion || 70018
     this.nonce = nonce
     this.services = services
     this.timestamp = timestamp
